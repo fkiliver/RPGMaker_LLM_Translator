@@ -1,6 +1,7 @@
 import json
 import requests
 import re
+import os
 from tqdm import tqdm
 
 def contains_japanese(text):
@@ -36,6 +37,11 @@ def save_config(last_processed):
     with open('config.json', 'w', encoding='utf-8') as file:
         json.dump({'last_processed': last_processed}, file)
 
+def delete_config():
+    # 删除配置文件
+    if os.path.exists('config.json'):
+        os.remove('config.json')
+
 def main():
     # 读取JSON文件
     with open('ManualTransFile.json', 'r', encoding='utf-8') as file:
@@ -60,6 +66,9 @@ def main():
             save_config(i + 1)
             with open('ManualTransFile.json', 'w', encoding='utf-8') as file:
                 json.dump(data, file, ensure_ascii=False, indent=4)
+
+    # 翻译完成后删除配置文件
+    delete_config()
 
 if __name__ == "__main__":
     main()
