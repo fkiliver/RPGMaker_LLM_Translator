@@ -23,13 +23,30 @@ def translate_text(text):
     # 获取响应的内容
     return response.json()['content']
 
+def load_config():
+    # 尝试读取配置文件来获取上次的进度
+    try:
+        with open('config.json', 'r', encoding='utf-8') as file:
+            return json.load(file).get('last_processed', 0)
+    except FileNotFoundError:
+        return 0
+
+def save_config(last_processed):
+    # 保存当前的进度到配置文件
+    with open('config.json', 'w', encoding='utf-8') as file:
+        json.dump({'last_processed': last_processed}, file)
+
 def main():
     # 读取JSON文件
     with open('ManualTransFile.json', 'r', encoding='utf-8') as file:
         data = json.load(file)
 
+    start_index = load_config()
+    keys = list(data.keys())
+
     # 使用tqdm创建进度条
-    for key in tqdm(data.keys(), desc="翻译进度"):
+    for i in tqdm(range(start_index, len(keys)), desc="翻译进度"):
+        key = keys[i]
         original_text = data[key]
         if contains_japanese(original_text):
             translated_text = translate_text(original_text)
@@ -38,9 +55,11 @@ def main():
         else:
             print(f"跳过（不含日文）: {original_text}")
 
-    # 将翻译后的数据写回文件
-    with open('ManualTransFile.json', 'w', encoding='utf-8') as file:
-        json.dump(data, file, ensure_ascii=False, indent=4)
+        # 每翻译100行就保存进度和文件
+        if (i + 1) % 100 == 0 or i + 1 == len(keys):
+            save_config(i + 1)
+            with open('ManualTransFile.json', 'w', encoding='utf-8') as file:
+                json.dump(data, file, ensure_ascii=False, indent=4)
 
 if __name__ == "__main__":
     main()
