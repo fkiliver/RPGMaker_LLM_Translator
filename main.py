@@ -11,7 +11,16 @@ def contains_japanese(text):
     # 检查文本是否包含日文字符
     return bool(re.search(r'[\u3040-\u30ff\u3400-\u4DBF\u4E00-\u9FFF]', text)), text
 
-def translate_text(text):
+def is_repetitive(text):
+    # 检查文本是否循环
+    return re.search(r'(.+?)(?:\1){15,}', text) is not None
+
+def log_repetitive(index):
+    # 记录异常的行号到log.txt
+    with open('log.txt', 'a', encoding='utf-8') as file:
+        file.write(f"重复异常行号：{index+1}\n")
+
+def translate_text(text, index):
     # 构造POST请求的数据
     data = {
         "frequency_penalty": 0,
@@ -25,7 +34,15 @@ def translate_text(text):
     # 发送POST请求
     response = requests.post("http://127.0.0.1:8080/completion", json=data)
     # 获取响应的内容
-    return response.json()['content']
+    translated_text = response.json()['content']
+
+    # 检查翻译后的文本是否有重复异常
+    if is_repetitive(translated_text):
+        log_repetitive(index)
+        # 对原文加上一个空格后重新翻译
+        return translate_text(" " + text, index)
+
+    return translated_text
 
 def load_config():
     # 尝试读取配置文件来获取上次的进度
@@ -59,7 +76,7 @@ def main():
         original_text = data[key]
         contains_jp, updated_text = contains_japanese(original_text)
         if contains_jp:
-            translated_text = translate_text(updated_text)
+            translated_text = translate_text(updated_text, i)
             print(f"原文: {updated_text} => 翻译: {translated_text}")
             data[key] = translated_text
         else:
