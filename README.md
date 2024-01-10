@@ -15,9 +15,10 @@
 
 复制项目内的main.py文件放置在Mtool导出的ManualTransFile.json同级目录下  
 
-安装tqdm库  
+安装库  
 ```
 pip install tqdm
+pip install requests
 ```
 运行main.py
 ```
