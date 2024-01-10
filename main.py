@@ -3,10 +3,13 @@ import requests
 import re
 import os
 from tqdm import tqdm
+import unicodedata
 
 def contains_japanese(text):
+    # 将文本中的半角假名转换为全角假名
+    text = unicodedata.normalize('NFKC', text)
     # 检查文本是否包含日文字符
-    return bool(re.search(r'[\u3040-\u30ff\u3400-\u4DBF\u4E00-\u9FFF]', text))
+    return bool(re.search(r'[\u3040-\u30ff\u3400-\u4DBF\u4E00-\u9FFF]', text)), text
 
 def translate_text(text):
     # 构造POST请求的数据
@@ -54,9 +57,10 @@ def main():
     for i in tqdm(range(start_index, len(keys)), desc="翻译进度"):
         key = keys[i]
         original_text = data[key]
-        if contains_japanese(original_text):
-            translated_text = translate_text(original_text)
-            print(f"原文: {original_text} => 翻译: {translated_text}")
+        contains_jp, updated_text = contains_japanese(original_text)
+        if contains_jp:
+            translated_text = translate_text(updated_text)
+            print(f"原文: {updated_text} => 翻译: {translated_text}")
             data[key] = translated_text
         else:
             print(f"跳过（不含日文）: {original_text}")
