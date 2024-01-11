@@ -15,7 +15,8 @@
 
 ![image](https://github.com/fkiliver/SakuraTranslator/assets/48873439/bc00335f-751e-4252-98bc-8b807640c400)
 
-复制项目内的`main.py`文件放置在Mtool导出的`ManualTransFile.json`同级目录下  
+复制项目内所有文件放置在Mtool导出的`ManualTransFile.json`同级目录下  
+在目录下打开windows终端\Powershell
 
 安装库：
 
