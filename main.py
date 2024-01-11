@@ -13,9 +13,10 @@ def contains_japanese(text):
     # 检查文本是否包含日文字符
     return bool(re.search(r'[\u3040-\u30ff\u3400-\u4DBF\u4E00-\u9FFF]', text)), text
 
-def is_repetitive(text):
-    # 检查文本是否包含重复的字或句子
-    return re.search(r'((.|\n)+?)(?:\1){15,}', text) is not None
+def find_repetitive(text):
+    # 查找文本中的重复部分
+    match = re.search(r'((.|\n)+?)(?:\1){15,}', text)
+    return match.group(1) if match else None
 
 def log_repetitive(index):
     # 记录异常的行号到log.txt
@@ -26,16 +27,21 @@ def generate_random_string(length=15):
     # 生成一个随机的五位英文字符字符串
     return ''.join(random.choices(string.ascii_letters, k=length))
 
-def translate_text(text, index, attempt=1):
+def translate_text(text, index, repetitive_part=None, attempt=1):
     if attempt > 3:
         # 如果重试次数超过3次，跳过这一行
         log_repetitive(index)
         return text
 
+    # 检查文本中是否有重复部分，并在翻译前去除
+    if repetitive_part is None:
+        repetitive_part = find_repetitive(text)
+        if repetitive_part:
+            text = text.replace(repetitive_part, '', 1)  # 只替换第一个匹配项
+
     # 构造POST请求的数据
     random_string = generate_random_string()
     modified_text = random_string + text
-    print(modified_text)
     data = {
         "frequency_penalty": 0,
         "n_predict": 1000,
@@ -50,12 +56,18 @@ def translate_text(text, index, attempt=1):
     # 获取响应的内容
     translated_text = response.json()['content']
 
-    # 检查翻译后的文本是否有重复异常
-    if is_repetitive(translated_text):
-        return translate_text(text, index, attempt + 1)
+    # 去除提示词
+    unwanted_string = "将下面的日文文本翻译成中文："
+    translated_text = translated_text.replace(unwanted_string, "")
 
-    # 如果翻译结果没有重复，从结果中去除随机字符
-    return translated_text.replace(random_string, "")
+    # 从结果中去除随机字符
+    translated_text = translated_text.replace(random_string, "")
+
+    # 将原本的重复部分加回翻译文本
+    if repetitive_part:
+        translated_text += repetitive_part
+
+    return translated_text
 
 def load_config():
     # 尝试读取配置文件来获取上次的进度
@@ -89,7 +101,8 @@ def main():
         original_text = data[key]
         contains_jp, updated_text = contains_japanese(original_text)
         if contains_jp:
-            translated_text = translate_text(updated_text, i)
+            repetitive_part = find_repetitive(updated_text)
+            translated_text = translate_text(updated_text, i, repetitive_part)
             print(f"原文: {updated_text} => 翻译: {translated_text}")
             data[key] = translated_text
         else:
