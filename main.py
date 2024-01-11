@@ -43,6 +43,7 @@ def translate_text(text, index, repetitive_part=None, attempt=1):
     # 检查文本中是否有重复部分，并在翻译前去除
     if repetitive_part is None:
         repetitive_part = find_repetitive(text)
+        print(f"重复部分：{repetitive_part}")
         if repetitive_part:
             text = text.replace(repetitive_part, '', 1)  # 只替换第一个匹配项
 
@@ -148,14 +149,15 @@ def main():
 
     print('开始翻译...')
     # 使用tqdm创建进度条
-    for i in tqdm(range(start_index, len(keys)), desc="翻译进度"):
+    for i in tqdm(range(start_index, len(keys)), desc="任务进度"):
+        print(f'索引:第{i}行')
         key = keys[i]
         original_text = data[key]
         contains_jp, updated_text = contains_japanese(original_text)
         if contains_jp:
             repetitive_part = find_repetitive(updated_text)
             translated_text = translate_text(updated_text, i, repetitive_part)
-            print(f"原文: {updated_text} => 翻译: {translated_text}")
+            print(f"原文: {updated_text} => 翻译: {translated_text}\n\n")
             data[key] = translated_text
         else:
             print(f"跳过（不含日文）: {original_text}")
