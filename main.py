@@ -32,7 +32,12 @@ def translate_text(text, index):
         "top_p": 0.3
     }
     # 发送POST请求
-    response = requests.post("http://127.0.0.1:8080/completion", json=data)
+    try:
+        response = requests.post("http://127.0.0.1:8080/completion", json=data)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f'Error during translation API request: {e}')
+        return text
     # 获取响应的内容
     translated_text = response.json()['content']
 
@@ -63,6 +68,7 @@ def delete_config():
         os.remove('config.json')
 
 def main():
+    print('Starting the text processing...')
     # 读取JSON文件
     with open('ManualTransFile.json', 'r', encoding='utf-8') as file:
         data = json.load(file)
@@ -84,12 +90,15 @@ def main():
 
         # 每翻译100行就保存进度和文件
         if (i + 1) % 100 == 0 or i + 1 == len(keys):
+            print('Saving progress...')
             save_config(i + 1)
             with open('ManualTransFile.json', 'w', encoding='utf-8') as file:
                 json.dump(data, file, ensure_ascii=False, indent=4)
+            print('Saved.')
 
     # 翻译完成后删除配置文件
     delete_config()
+    print("done.")
 
 if __name__ == "__main__":
     main()
