@@ -26,15 +26,18 @@ def generate_random_string(length=15):
     # 生成一个随机的五位英文字符字符串
     return ''.join(random.choices(string.ascii_letters, k=length))
 
-def translate_text(text, index, attempt=1):
+def translate_text(text, index, attempt=1, random_prosess=False):
     if attempt > 3:
         # 如果重试次数超过3次，跳过这一行
         log_repetitive(index)
         return text
 
     # 构造POST请求的数据
-    random_string = generate_random_string()
-    modified_text = random_string + text
+    if random_prosess:
+        random_string = generate_random_string()
+        modified_text = random_string + text
+    else:
+       modified_text = text
     print(modified_text)
     data = {
         "frequency_penalty": 0,
@@ -51,11 +54,16 @@ def translate_text(text, index, attempt=1):
     translated_text = response.json()['content']
 
     # 检查翻译后的文本是否有重复异常
+    
     if is_repetitive(translated_text):
-        return translate_text(text, index, attempt + 1)
+        return translate_text(text, index, attempt + 1, True)
 
     # 如果翻译结果没有重复，从结果中去除随机字符
-    return translated_text.replace(random_string, "")
+    if random_prosess:
+        return translated_text.replace(random_string, "")
+    else:
+        return translated_text
+   
 
 def load_config():
     # 尝试读取配置文件来获取上次的进度
