@@ -22,6 +22,7 @@ def find_repetitive(text):
     # 查找文本中的重复部分
     match = re.search(r'((.|\n)+?)(?:\1){10,}', text)
     return match.group(1) if match else None
+    # todo以特殊字符为分割，分段提交
 
 def log_repetitive(index):
     print("存在重复异常，记录至log.txt...")
