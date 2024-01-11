@@ -16,6 +16,7 @@ def is_repetitive(text):
     return re.search(r'(.+?)(?:\1){15,}', text) is not None
 
 def log_repetitive(index):
+    print("存在重复异常，记录至log.txt...")
     # 记录异常的行号到log.txt
     with open('log.txt', 'a', encoding='utf-8') as file:
         file.write(f"重复异常行号：{index+1}\n")
@@ -36,7 +37,7 @@ def translate_text(text, index):
         response = requests.post("http://127.0.0.1:8080/completion", json=data)
         response.raise_for_status()
     except requests.RequestException as e:
-        print(f'Error during translation API request: {e}')
+        print(f'请求翻译API错误: {e}')
         return text
     # 获取响应的内容
     translated_text = response.json()['content']
@@ -50,7 +51,7 @@ def translate_text(text, index):
     return translated_text
 
 def load_config():
-    # 尝试读取配置文件来获取上次的进度
+    print("尝试读取配置文件来获取上次的进度...")
     try:
         with open('config.json', 'r', encoding='utf-8') as file:
             return json.load(file).get('last_processed', 0)
@@ -63,19 +64,20 @@ def save_config(last_processed):
         json.dump({'last_processed': last_processed}, file)
 
 def delete_config():
-    # 删除配置文件
+    print("删除配置文件")
     if os.path.exists('config.json'):
         os.remove('config.json')
 
 def main():
-    print('Starting the text processing...')
-    # 读取JSON文件
+    print("读取JSON文件...")
     with open('ManualTransFile.json', 'r', encoding='utf-8') as file:
         data = json.load(file)
+    print("读取完成.")
 
     start_index = load_config()
     keys = list(data.keys())
 
+    print('开始翻译...')
     # 使用tqdm创建进度条
     for i in tqdm(range(start_index, len(keys)), desc="翻译进度"):
         key = keys[i]
@@ -88,17 +90,16 @@ def main():
         else:
             print(f"跳过（不含日文）: {original_text}")
 
-        # 每翻译100行就保存进度和文件
         if (i + 1) % 100 == 0 or i + 1 == len(keys):
-            print('Saving progress...')
+            print("达到100行，保存进度和文件...")
             save_config(i + 1)
             with open('ManualTransFile.json', 'w', encoding='utf-8') as file:
                 json.dump(data, file, ensure_ascii=False, indent=4)
-            print('Saved.')
+            print("保存完成.")
 
     # 翻译完成后删除配置文件
     delete_config()
-    print("done.")
+    print("All done.")
 
 if __name__ == "__main__":
     main()
