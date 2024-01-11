@@ -45,8 +45,8 @@ def translate_text(text, index, repetitive_part=None, attempt=1):
         if repetitive_part:
             text = text.replace(repetitive_part, '', 1)  # 只替换第一个匹配项
 
-    # 构造POST请求的数据
-            
+    
+
     # 重试时加上随机字符
     if attempt > 1:
         random_string = generate_random_string()
@@ -56,16 +56,29 @@ def translate_text(text, index, repetitive_part=None, attempt=1):
         modified_text = text
 
     print(f"提交的文本为：{modified_text}")
+    
+    # 构造POST请求的数据
+    if ver == 1 :
+        data = {
+            "frequency_penalty": 0,
+            "n_predict": 1000,
+            "prompt": f"<|im_start|>system\n你是一个轻小说翻译模型，可以流畅通顺地以日本轻小说的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，不擅自添加原文中没有的代词。<|im_end|>\n<|im_start|>user\n将下面的日文文本翻译成中文：{modified_text}<|im_end|>\n<|im_start|>assistant\n",
+            "repeat_penalty": 1,
+            "temperature": 0.1,
+            "top_k": 40,
+            "top_p": 0.3
+        }
+    else:
+        data = {
+            "frequency_penalty": 0,
+            "n_predict": 1000,
+            "prompt": f"<reserved_106>将下面的日文文本翻译成中文：{modified_text}<reserved_107>",
+            "repeat_penalty": 1,
+            "temperature": 0.1,
+            "top_k": 40,
+            "top_p": 0.3
+        }
 
-    data = {
-        "frequency_penalty": 0,
-        "n_predict": 1000,
-        "prompt": f"<reserved_106>将下面的日文文本翻译成中文：{modified_text}<reserved_107>",
-        "repeat_penalty": 1,
-        "temperature": 0.1,
-        "top_k": 40,
-        "top_p": 0.3
-    }
     # 发送POST请求
     try:
         response = requests.post("http://127.0.0.1:8080/completion", json=data)
@@ -116,6 +129,14 @@ def delete_config():
         os.remove('config.json')
 
 def main():
+    #选择模型版本
+    global ver 
+    veri = input("模型版本选择：*[0] v0.8    [1] v0.9\n")
+    if veri == "" :
+        ver = 0
+    else:
+        ver = int(veri)
+    # 读取JSON文件
     print("读取JSON文件...")
     with open('ManualTransFile.json', 'r', encoding='utf-8') as file:
         data = json.load(file)
