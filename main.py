@@ -2,6 +2,8 @@ import json
 import requests
 import re
 import os
+import random
+import string
 from tqdm import tqdm
 import unicodedata
 
@@ -12,20 +14,32 @@ def contains_japanese(text):
     return bool(re.search(r'[\u3040-\u30ff\u3400-\u4DBF\u4E00-\u9FFF]', text)), text
 
 def is_repetitive(text):
-    # 检查文本是否循环
-    return re.search(r'(.+?)(?:\1){15,}', text) is not None
+    # 检查文本是否包含重复的字或句子
+    return re.search(r'((.|\n)+?)(?:\1){15,}', text) is not None
 
 def log_repetitive(index):
     # 记录异常的行号到log.txt
     with open('log.txt', 'a', encoding='utf-8') as file:
-        file.write(f"重复异常行号：{index+1}\n")
+        file.write(f"重复异常行号：{index}\n")
 
-def translate_text(text, index):
+def generate_random_string(length=15):
+    # 生成一个随机的五位英文字符字符串
+    return ''.join(random.choices(string.ascii_letters, k=length))
+
+def translate_text(text, index, attempt=1):
+    if attempt > 3:
+        # 如果重试次数超过3次，跳过这一行
+        log_repetitive(index)
+        return text
+
     # 构造POST请求的数据
+    random_string = generate_random_string()
+    modified_text = random_string + text
+    print(modified_text)
     data = {
         "frequency_penalty": 0,
         "n_predict": 1000,
-        "prompt": f"<reserved_106>将下面的日文文本翻译成中文：{text}<reserved_107>",
+        "prompt": f"<reserved_106>将下面的日文文本翻译成中文：{modified_text}<reserved_107>",
         "repeat_penalty": 1,
         "temperature": 0.1,
         "top_k": 40,
@@ -38,11 +52,10 @@ def translate_text(text, index):
 
     # 检查翻译后的文本是否有重复异常
     if is_repetitive(translated_text):
-        log_repetitive(index)
-        # 对原文加上一个空格后重新翻译
-        return translate_text(" " + text, index)
+        return translate_text(text, index, attempt + 1)
 
-    return translated_text
+    # 如果翻译结果没有重复，从结果中去除随机字符
+    return translated_text.replace(random_string, "")
 
 def load_config():
     # 尝试读取配置文件来获取上次的进度
