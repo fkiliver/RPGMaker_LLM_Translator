@@ -2,6 +2,8 @@ import json
 import requests
 import re
 import os
+import random
+import string
 from tqdm import tqdm
 import unicodedata
 
@@ -12,21 +14,53 @@ def contains_japanese(text):
     return bool(re.search(r'[\u3040-\u30ff\u3400-\u4DBF\u4E00-\u9FFF]', text)), text
 
 def is_repetitive(text):
-    # 检查文本是否循环
-    return re.search(r'(.+?)(?:\1){15,}', text) is not None
+    # 检查文本是否包含重复的字或句子
+    return re.search(r'((.|\n)+?)(?:\1){15,}', text) is not None
+
+
+def find_repetitive(text):
+    # 查找文本中的重复部分
+    match = re.search(r'((.|\n)+?)(?:\1){10,}', text)
+    return match.group(1) if match else None
 
 def log_repetitive(index):
     print("存在重复异常，记录至log.txt...")
     # 记录异常的行号到log.txt
     with open('log.txt', 'a', encoding='utf-8') as file:
-        file.write(f"重复异常行号：{index+1}\n")
+        file.write(f"重复异常行号：{index}\n")
 
-def translate_text(text, index):
+def generate_random_string(length=2):
+    # 生成一个随机的五位英文字符字符串
+    return ''.join(random.choices(string.ascii_letters, k=length))
+
+def translate_text(text, index, repetitive_part=None, attempt=1):
+    if attempt > 3:
+        # 如果重试次数超过3次，跳过这一行
+        log_repetitive(index)
+        return text
+
+    # 检查文本中是否有重复部分，并在翻译前去除
+    if repetitive_part is None:
+        repetitive_part = find_repetitive(text)
+        if repetitive_part:
+            text = text.replace(repetitive_part, '', 1)  # 只替换第一个匹配项
+
     # 构造POST请求的数据
+            
+    # 重试时加上随机字符
+    if attempt > 1:
+        random_string = generate_random_string()
+        print(f"添加随机字符串重试：{random_string}")
+        modified_text = random_string + text
+    else:
+        modified_text = text
+
+    print(f"提交的文本为：{modified_text}")
+
     data = {
         "frequency_penalty": 0,
         "n_predict": 1000,
-        "prompt": f"<reserved_106>将下面的日文文本翻译成中文：{text}<reserved_107>",
+        "prompt": f"<reserved_106>将下面的日文文本翻译成中文：{modified_text}<reserved_107>",
         "repeat_penalty": 1,
         "temperature": 0.1,
         "top_k": 40,
@@ -42,11 +76,24 @@ def translate_text(text, index):
     # 获取响应的内容
     translated_text = response.json()['content']
 
-    # 检查翻译后的文本是否有重复异常
     if is_repetitive(translated_text):
-        log_repetitive(index)
-        # 对原文加上一个空格后重新翻译
-        return translate_text(" " + text, index)
+        return translate_text(text, index, repetitive_part, attempt + 1)
+
+    # 去除翻译结果中不希望出现的特定字符串
+    unwanted_string = "将下面的日文文本翻译成中文："
+    translated_text = translated_text.replace(unwanted_string, "")
+
+    # 检查翻译结果是否为全英文
+    if translated_text.isascii():
+        return translate_text(text, index, repetitive_part, attempt + 1)
+
+    # 去除随机字符
+    if attempt > 1:
+        translated_text = translated_text.replace(random_string, "")
+
+    # 将原本的重复部分加回翻译文本
+    if repetitive_part:
+        translated_text += repetitive_part
 
     return translated_text
 
@@ -84,7 +131,8 @@ def main():
         original_text = data[key]
         contains_jp, updated_text = contains_japanese(original_text)
         if contains_jp:
-            translated_text = translate_text(updated_text, i)
+            repetitive_part = find_repetitive(updated_text)
+            translated_text = translate_text(updated_text, i, repetitive_part)
             print(f"原文: {updated_text} => 翻译: {translated_text}")
             data[key] = translated_text
         else:
