@@ -13,15 +13,14 @@ def contains_japanese(text):
     # 检查文本是否包含日文字符
     return bool(re.search(r'[\u3040-\u30ff\u3400-\u4DBF\u4E00-\u9FFF]', text)), text
 
+def contains_chinese(text):
+    # 检查文本是否包含中文字符
+    return bool(re.search(r'[\u4e00-\u9fff]', text))
+
 def is_repetitive(text):
     # 检查文本是否包含重复的字或句子
     return re.search(r'((.|\n)+?)(?:\1){15,}', text) is not None
 
-
-def find_repetitive(text):
-    # 查找文本中的重复部分
-    match = re.search(r'((.|\n)+?)(?:\1){10,}', text)
-    return match.group(1) if match else None
     # todo以特殊字符为分割，分段提交
 
 def log_repetitive(index):
@@ -34,20 +33,11 @@ def generate_random_string(length=2):
     # 生成一个随机的五位英文字符字符串
     return ''.join(random.choices(string.ascii_letters, k=length))
 
-def translate_text(text, index, repetitive_part=None, attempt=1):
+def translate_text(text, index, attempt=1):
     if attempt > 3:
         # 如果重试次数超过3次，跳过这一行
         log_repetitive(index)
         return text
-
-    # 检查文本中是否有重复部分，并在翻译前去除
-    if repetitive_part is None:
-        repetitive_part = find_repetitive(text)
-        print(f"重复部分：{repetitive_part}")
-        if repetitive_part:
-            text = text.replace(repetitive_part, '', 1)  # 只替换第一个匹配项
-
-    
 
     # 重试时加上随机字符
     if attempt > 1:
@@ -92,23 +82,20 @@ def translate_text(text, index, repetitive_part=None, attempt=1):
     translated_text = response.json()['content']
 
     if is_repetitive(translated_text):
-        return translate_text(text, index, repetitive_part, attempt + 1)
+        return translate_text(text, index, attempt + 1)
 
     # 去除翻译结果中不希望出现的特定字符串
     unwanted_string = "将下面的日文文本翻译成中文："
     translated_text = translated_text.replace(unwanted_string, "")
 
-    # 检查翻译结果是否为全英文
-    if translated_text.isascii():
-        return translate_text(text, index, repetitive_part, attempt + 1)
+    # 如果结果不含中文
+    if not contains_chinese(translated_text):
+        print("翻译结果不含中文，重试...")
+        return translate_text(text, index, attempt + 1)
 
     # 去除随机字符
     if attempt > 1:
         translated_text = translated_text.replace(random_string, "")
-
-    # 将原本的重复部分加回翻译文本
-    if repetitive_part:
-        translated_text += repetitive_part
 
     return translated_text
 
@@ -138,6 +125,7 @@ def main():
         ver = 0
     else:
         ver = int(veri)
+
     # 读取JSON文件
     print("读取JSON文件...")
     with open('ManualTransFile.json', 'r', encoding='utf-8') as file:
@@ -146,8 +134,8 @@ def main():
 
     start_index = load_config()
     keys = list(data.keys())
-
     print('开始翻译...')
+
     # 使用tqdm创建进度条
     for i in tqdm(range(start_index, len(keys)), desc="任务进度"):
         print(f'索引:第{i}行')
@@ -155,8 +143,7 @@ def main():
         original_text = data[key]
         contains_jp, updated_text = contains_japanese(original_text)
         if contains_jp:
-            repetitive_part = find_repetitive(updated_text)
-            translated_text = translate_text(updated_text, i, repetitive_part)
+            translated_text = translate_text(updated_text, i)
             print(f"原文: {updated_text} => 翻译: {translated_text}\n\n")
             data[key] = translated_text
         else:
