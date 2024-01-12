@@ -21,13 +21,11 @@ def is_repetitive(text):
     # 检查文本是否包含重复的字或句子
     return re.search(r'((.|\n)+?)(?:\1){15,}', text) is not None
 
-    # todo以特殊字符为分割，分段提交
-
 def log_repetitive(index):
-    print("存在重复异常，记录至log.txt...")
+    print("存在翻译异常，记录至log.txt...")
     # 记录异常的行号到log.txt
     with open('log.txt', 'a', encoding='utf-8') as file:
-        file.write(f"重复异常行号：{index}\n")
+        file.write(f"异常行号：{index+2}\n")
 
 def generate_random_string(length=2):
     # 生成一个随机的五位英文字符字符串
@@ -90,6 +88,7 @@ def translate_text(text, index, attempt=1):
 
     # 如果结果不含中文
     if not contains_chinese(translated_text):
+        print(translated_text)
         print("翻译结果不含中文，重试...")
         return translate_text(text, index, attempt + 1)
 
@@ -120,7 +119,7 @@ def delete_config():
 def main():
     #选择模型版本
     global ver 
-    veri = input("模型版本选择：*[0] v0.8    [1] v0.9\n")
+    veri = input("请输入数字来选择使用的模型:\n[0] v0.8\n[1] v0.9\n")
     if veri == "" :
         ver = 0
     else:
@@ -138,7 +137,7 @@ def main():
 
     # 使用tqdm创建进度条
     for i in tqdm(range(start_index, len(keys)), desc="任务进度"):
-        print(f'索引:第{i}行')
+        print(f'索引:第{i+2}行')
         key = keys[i]
         original_text = data[key]
         contains_jp, updated_text = contains_japanese(original_text)
