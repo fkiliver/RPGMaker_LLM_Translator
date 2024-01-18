@@ -1,7 +1,8 @@
 # 介绍
 这是一个基于Mtool和Sakura模型的RPGMaker游戏本地翻译器  
 通过Mtool导入导出翻译文本，通过Sakura模型翻译日语文本  
-经测试支持的模型：Sakura v0.8/Sakura v0.9
+经测试支持的模型：Sakura v0.8/Sakura v0.9  
+建议使用Sakura v0.9b https://huggingface.co/SakuraLLM/Sakura-13B-LNovel-v0.9b-GGUF/tree/main
 
 # 准备
 首先参考Mtool文档完成对翻译文本的导出：[Mtool](https://afdian.net/a/AdventCirno)  
