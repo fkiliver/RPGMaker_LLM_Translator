@@ -95,6 +95,9 @@ def translate_text(text, index, attempt=1):
     # 去除随机字符
     if attempt > 1:
         translated_text = translated_text.replace(random_string, "")
+    
+    # 去除高版本llama.cpp结尾的<|im_end|>
+    translated_text = translated_text.replace("<|im_end|>", "")
 
     return translated_text
 
