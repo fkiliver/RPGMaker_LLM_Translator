@@ -6,7 +6,7 @@
 
 # 准备
 首先参考Mtool文档完成对翻译文本的导出：[Mtool](https://afdian.net/a/AdventCirno)  
-然后参考Sakura模型文档完成本地部署：[Sakura模型本地部署教程](https://books.fishhawk.top/forum/656d60530286f15e3384fcf8)  
+然后参考Sakura模型文档完成本地部署：[Sakura模型本地部署教程](https://github.com/SakuraLLM/Sakura-13B-Galgame/wiki)  
 
 # 流程
 确保Sakura服务器成功启动并监听`http://127.0.0.1:8080`
