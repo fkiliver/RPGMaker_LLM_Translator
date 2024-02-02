@@ -6,6 +6,7 @@ import random
 import string
 from tqdm import tqdm
 import unicodedata
+import time
 
 def contains_japanese(text):
     # 将文本中的半角假名转换为全角假名
@@ -119,6 +120,10 @@ def delete_config():
     if os.path.exists('config.json'):
         os.remove('config.json')
 
+def Jp_hash(text):
+    text = re.sub(r'[.。,，、！!？?♡「」\s]', '', text)
+    return hash(text)
+
 def main():
     #选择模型版本
     global ver 
@@ -136,6 +141,11 @@ def main():
 
     start_index = load_config()
     keys = list(data.keys())
+    hash_list = {}
+    
+    # 将之前已经翻译过的文本的哈希值存入列表
+    for i in range(start_index):
+        hash_list[Jp_hash(data[keys[i]])] = i
     print('开始翻译...')
 
     # 使用tqdm创建进度条
@@ -145,7 +155,15 @@ def main():
         original_text = data[key]
         contains_jp, updated_text = contains_japanese(original_text)
         if contains_jp:
-            translated_text = translate_text(updated_text, i)
+            # 计算字符串的哈希值，并检查是否重复
+            text_hash = Jp_hash(updated_text)
+            if text_hash in hash_list:
+                print("翻译结果重复，跳过...")
+                time.sleep(0.1)
+                translated_text = data[keys[hash_list[text_hash]]]
+            else:
+                translated_text = translate_text(updated_text, i)
+                hash_list[text_hash] = i
             print(f"原文: {updated_text} => 翻译: {translated_text}\n\n")
             data[key] = translated_text
         else:
