@@ -7,6 +7,7 @@ import string
 from tqdm import tqdm
 import unicodedata
 import time
+import sys
 
 def contains_japanese(text):
     # 将文本中的半角假名转换为全角假名
@@ -49,7 +50,7 @@ def translate_text(text, index, attempt=1):
     print(f"提交的文本为：{modified_text}")
     
     # 构造POST请求的数据
-    if ver == 1 :
+    if api_type == 0 :
         data = {
             "frequency_penalty": 0.2,
             "n_predict": 1000,
@@ -61,18 +62,29 @@ def translate_text(text, index, attempt=1):
         }
     else:
         data = {
-            "frequency_penalty": 0.2,
-            "n_predict": 1000,
-            "prompt": f"<reserved_106>将下面的日文文本翻译成中文：{modified_text}<reserved_107>",
-            "repeat_penalty": 1,
+            "model": "sukinishiro",
+            "messages": [{
+                    "role": "system",
+                    "content": "你是一个轻小说翻译模型，可以流畅通顺地以日本轻小说的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，不擅自添加原文中没有的代词。"
+                },
+                {
+                    "role": "user",
+                    "content": "将下面的日文文本翻译成中文：{modified_text}"
+                }
+            ],
             "temperature": 0.1,
+            "top_p": 0.3,
+            "max_tokens":1000,
+            "frequency_penalty":0.2,
+            "do_sample": "false",
             "top_k": 40,
-            "top_p": 0.3
+            "um_beams": 1,
+            "repetition_penalty": 1.0
         }
 
     # 发送POST请求
     try:
-        response = requests.post("http://127.0.0.1:8080/completion", json=data)
+        response = requests.post(endpoint, json=data)
         response.raise_for_status()
     except requests.RequestException as e:
         print(f'请求翻译API错误: {e}')
@@ -102,7 +114,7 @@ def translate_text(text, index, attempt=1):
 
     return translated_text
 
-def load_config():
+def load_progress():
     print("尝试读取配置文件来获取上次的进度...")
     try:
         with open('config.json', 'r', encoding='utf-8') as file:
@@ -110,15 +122,15 @@ def load_config():
     except FileNotFoundError:
         return 0
 
-def save_config(last_processed):
+def save_progress(last_processed):
     # 保存当前的进度到配置文件
-    with open('config.json', 'w', encoding='utf-8') as file:
-        json.dump({'last_processed': last_processed}, file)
+    with open('config.json', 'r', encoding='utf-8') as file:
+        data = json.load(file)
+    data['last_processed'] = last_processed
+    with open('config.json', 'w') as file:
+        json.dump(data, file, indent=4)
 
-def delete_config():
-    print("删除配置文件")
-    if os.path.exists('config.json'):
-        os.remove('config.json')
+    # json.dump({'last_processed': last_processed}, file)
 
 def Jp_hash(text):
     text = re.sub(r'[.。,，、！!？?♡「」\s]', '', text)
@@ -126,20 +138,79 @@ def Jp_hash(text):
 
 def main():
     #选择模型版本
-    global ver 
-    veri = input("请输入数字来选择使用的模型:\n[0] v0.8\n[1] v0.9\n")
-    if veri == "" :
-        ver = 0
-    else:
-        ver = int(veri)
+    if not os.path.exists("config.json"):
+        config_data = {
+            "last_processed": 0,
+            "endpoint": "",
+            "api_type": 0
+        }
+        with open("config.json", 'w') as file:
+            json.dump(config_data, file, indent=4)
+
+    global api_type
+    global endpoint
+
+    with open('config.json', 'r', encoding='utf-8') as file:
+        endpoint = json.load(file).get('endpoint')
+
+    with open('config.json', 'r', encoding='utf-8') as file:
+        api_type = json.load(file).get('api_type')
+
+    if endpoint == '':
+        
+        veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署\n[1] kaggle部署\n")
+        if veri == "" :
+            api_type = 0
+        else:
+            api_type = int(veri)
+
+        with open('config.json', 'r', encoding='utf-8') as file:
+            data = json.load(file)
+        data['api_type'] = api_type
+        with open('config.json', 'w') as file:
+            json.dump(data, file, indent=4)
+            # json.dump({'api_type': api_type}, file)
+
+        if api_type == 0 :
+            verurl = input("请输入Api地址(默认为http://127.0.0.1:8080/completion):\n")
+            if verurl == "" :
+                endpoint = "http://127.0.0.1:8080/completion"
+            else:
+                endpoint = verurl
+            #保存url
+            with open('config.json', 'r', encoding='utf-8') as file:
+                data = json.load(file)
+            data['endpoint'] = endpoint
+            with open('config.json', 'w') as file:
+                json.dump(data, file, indent=4)
+                    # json.dump({'endpoint': endpoint}, file)
+
+        else :
+            verurl = input("请输入Api地址(例如https://114-514-191-810.ngrok-free.app):\n")
+            if verurl == "" :
+                print("必须提供Api地址！")
+                sys.exit()
+            else :
+                endpoint = verurl
+                #保存url
+                with open('config.json', 'r', encoding='utf-8') as file:
+                    data = json.load(file)
+                data['endpoint'] = endpoint
+                with open('config.json', 'w') as file:
+                    json.dump(data, file, indent=4)
+                # json.dump({'endpoint': endpoint}, file)
+
+        print("配置已保存到config.json,下次启动将默认加载")
 
     # 读取JSON文件
-    print("读取JSON文件...")
+    print("读取待翻译的文本...")
     with open('ManualTransFile.json', 'r', encoding='utf-8') as file:
         data = json.load(file)
     print("读取完成.")
 
-    start_index = load_config()
+
+    #读取进度
+    start_index = load_progress()
     keys = list(data.keys())
     hash_list = {}
     
@@ -171,13 +242,13 @@ def main():
 
         if (i + 1) % 100 == 0 or i + 1 == len(keys):
             print("达到100行，保存进度和文件...")
-            save_config(i + 1)
+            save_progress(i + 1)
             with open('ManualTransFile.json', 'w', encoding='utf-8') as file:
                 json.dump(data, file, ensure_ascii=False, indent=4)
             print("保存完成.")
 
-    # 翻译完成后删除配置文件
-    delete_config()
+    # 翻译完成后进度重置
+    save_progress(0)
     print("All done.")
 
 if __name__ == "__main__":
