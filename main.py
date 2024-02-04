@@ -69,7 +69,7 @@ def translate_text(text, index, attempt=1):
                 },
                 {
                     "role": "user",
-                    "content": "将下面的日文文本翻译成中文：{modified_text}"
+                    "content": f"将下面的日文文本翻译成中文：{modified_text}"
                 }
             ],
             "temperature": 0.1,
@@ -90,7 +90,7 @@ def translate_text(text, index, attempt=1):
         print(f'请求翻译API错误: {e}')
         return text
     # 获取响应的内容
-    translated_text = response.json()['content']
+    translated_text = response.json()["choices"][0]["message"]["content"]
 
     if is_repetitive(translated_text):
         return translate_text(text, index, attempt + 1)
@@ -191,7 +191,7 @@ def main():
                 print("必须提供Api地址！")
                 sys.exit()
             else :
-                endpoint = verurl
+                endpoint = verurl+"/v1/chat/completions"
                 #保存url
                 with open('config.json', 'r', encoding='utf-8') as file:
                     data = json.load(file)
