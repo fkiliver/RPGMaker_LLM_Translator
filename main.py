@@ -114,19 +114,12 @@ def translate_text(text, index, attempt=1):
 
     return translated_text
 
-def load_progress():
-    print("尝试读取配置文件来获取上次的进度...")
-    try:
-        with open('config.json', 'r', encoding='utf-8') as file:
-            return json.load(file).get('last_processed', 0)
-    except FileNotFoundError:
-        return 0
-
-def save_progress(last_processed):
+def save_progress(last_processed,last_task):
     # 保存当前的进度到配置文件
     with open('config.json', 'r', encoding='utf-8') as file:
         data = json.load(file)
     data['last_processed'] = last_processed
+    data['task_list'] = last_task
     with open('config.json', 'w') as file:
         json.dump(data, file, indent=4)
 
@@ -136,40 +129,37 @@ def Jp_hash(text):
     text = re.sub(r'[.。,，、！!？?♡「」\s]', '', text)
     return hash(text)
 
-def main():
-    #选择模型版本
+def init():  
+    # 检查配置文件是否存在
     if not os.path.exists("config.json"):
         config_data = {
             "last_processed": 0,
+            "task_list": [],
             "endpoint": "",
-            "api_type": 0
+            "api_type": 0,
+            "save_frequency": 100,
+            "shutdown": 0
         }
         with open("config.json", 'w') as file:
             json.dump(config_data, file, indent=4)
-
-    global api_type
-    global endpoint
-
+    # 读取配置文件
+    global api_type, endpoint, save_frequency, shutdown, task_list, start_index
     with open('config.json', 'r', encoding='utf-8') as file:
-        endpoint = json.load(file).get('endpoint')
-
-    with open('config.json', 'r', encoding='utf-8') as file:
-        api_type = json.load(file).get('api_type')
-
+        data=json.load(file)
+    endpoint = data['endpoint']
+    api_type = data['api_type']
+    save_frequency = data['save_frequency']
+    shutdown = data['shutdown']
+    task_list = data['task_list']
+    start_index = data['last_processed']
+    # 读取api信息
     if endpoint == '':
-        
         veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署\n[1] kaggle部署\n")
         if veri == "" :
             api_type = 0
         else:
             api_type = int(veri)
-
-        with open('config.json', 'r', encoding='utf-8') as file:
-            data = json.load(file)
         data['api_type'] = api_type
-        with open('config.json', 'w') as file:
-            json.dump(data, file, indent=4)
-            # json.dump({'api_type': api_type}, file)
 
         if api_type == 0 :
             verurl = input("请输入Api地址(默认为http://127.0.0.1:8080/completion):\n")
@@ -177,14 +167,7 @@ def main():
                 endpoint = "http://127.0.0.1:8080/completion"
             else:
                 endpoint = verurl
-            #保存url
-            with open('config.json', 'r', encoding='utf-8') as file:
-                data = json.load(file)
             data['endpoint'] = endpoint
-            with open('config.json', 'w') as file:
-                json.dump(data, file, indent=4)
-                    # json.dump({'endpoint': endpoint}, file)
-
         else :
             verurl = input("请输入Api地址(例如https://114-514-191-810.ngrok-free.app):\n")
             if verurl == "" :
@@ -192,64 +175,109 @@ def main():
                 sys.exit()
             else :
                 endpoint = verurl
-                #保存url
-                with open('config.json', 'r', encoding='utf-8') as file:
-                    data = json.load(file)
                 data['endpoint'] = endpoint
-                with open('config.json', 'w') as file:
-                    json.dump(data, file, indent=4)
-                # json.dump({'endpoint': endpoint}, file)
-
         print("配置已保存到config.json,下次启动将默认加载")
-
-    # 读取JSON文件
-    print("读取待翻译的文本...")
-    with open('ManualTransFile.json', 'r', encoding='utf-8') as file:
-        data = json.load(file)
-    print("读取完成.")
-
-
-    #读取进度
-    start_index = load_progress()
-    keys = list(data.keys())
-    hash_list = {}
-    
-    # 将之前已经翻译过的文本的哈希值存入列表
-    for i in range(start_index):
-        hash_list[Jp_hash(data[keys[i]])] = i
-    print('开始翻译...')
-
-    # 使用tqdm创建进度条
-    for i in tqdm(range(start_index, len(keys)), desc="任务进度"):
-        print(f'索引:第{i+2}行')
-        key = keys[i]
-        original_text = data[key]
-        contains_jp, updated_text = contains_japanese(original_text)
-        if contains_jp:
-            # 计算字符串的哈希值，并检查是否重复
-            text_hash = Jp_hash(updated_text)
-            if text_hash in hash_list:
-                print("翻译结果重复，跳过...")
-                time.sleep(0.1)
-                translated_text = data[keys[hash_list[text_hash]]]
+    # 读取任务列表,保存频率,自动关机信息
+    if task_list == []:
+        print("请输入需要翻译的文件名，如有多个请换行输入(默认为ManualTransFile.json):")
+        while True:
+            veri = input()
+            if veri == "" :
+                if task_list == []:
+                    if os.path.exists("ManualTransFile.json") == 0:
+                        print("文件ManualTransFile.json不存在")
+                        sys.exit()
+                    task_list = ["ManualTransFile.json"]
+                break
+            file_name = veri.split("\n")[0]
+            if os.path.exists(str(file_name)) == 0:
+                print(f"文件{file_name}不存在，请重新输入")
             else:
-                translated_text = translate_text(updated_text, i)
-                hash_list[text_hash] = i
-            print(f"原文: {updated_text} => 翻译: {translated_text}\n\n")
-            data[key] = translated_text
+                task_list.append(file_name)
+        data['task_list'] = task_list
+        # 保存频率
+        veri = input("请输入保存频率(默认为100行):\n")
+        if veri == "" :
+            save_frequency = 100
         else:
-            print(f"跳过（不含日文）: {original_text}")
+            save_frequency = int(veri)
+        data['save_frequency'] = save_frequency
+        # 自动关机
+        veri = input("是否翻译完成后自动关机？(默认为0)\n[0] 不关机\n[1] 关机\n")
+        if veri == "" :
+            shutdown = 0
+        else:
+            shutdown = int(veri)
+        data['shutdown'] = shutdown
+    else:
+        print(f"已加载任务列表{task_list},保存频率为{save_frequency},自动关机状态为{shutdown}")
+    # 保存配置
+    with open('config.json', 'w') as file:
+        json.dump(data, file, indent=4)
 
-        if (i + 1) % 100 == 0 or i + 1 == len(keys):
-            print("达到100行，保存进度和文件...")
-            save_progress(i + 1)
-            with open('ManualTransFile.json', 'w', encoding='utf-8') as file:
-                json.dump(data, file, ensure_ascii=False, indent=4)
-            print("保存完成.")
+def shutdown_pc():
+    if(os.name=='nt'):
+        os.system('shutdown -s -t 60')
+    else:
+        os.system('shutdown -h 1')
 
+def main():
+    init()              
+    while task_list != []:
+        # 读取JSON文件
+        task_name = task_list[0]
+        print(f"开始翻译{task_name},正在读取文件...")
+        with open(task_name, 'r', encoding='utf-8') as file:
+            data = json.load(file)
+        print("读取完成.")
+
+        keys = list(data.keys())
+        hash_list = {}
+        
+        # 将之前已经翻译过的文本的哈希值存入列表
+        for i in range(start_index):
+            hash_list[Jp_hash(data[keys[i]])] = i
+        print('开始翻译...')
+
+        # 使用tqdm创建进度条
+        for i in tqdm(range(start_index, len(keys)), desc="任务进度"):
+            print(f'翻译文件:{task_name} 索引:第{i+2}行')
+            key = keys[i]
+            original_text = data[key]
+            contains_jp, updated_text = contains_japanese(original_text)
+            if contains_jp:
+                # 计算字符串的哈希值，并检查是否重复
+                text_hash = Jp_hash(updated_text)
+                if text_hash in hash_list:
+                    print("翻译结果重复，跳过...")
+                    time.sleep(0.1)
+                    translated_text = data[keys[hash_list[text_hash]]]
+                else:
+                    translated_text = translate_text(updated_text, i)
+                    hash_list[text_hash] = i
+                print(f"原文: {updated_text} => 翻译: {translated_text}\n\n")
+                data[key] = translated_text
+            else:
+                print(f"跳过（不含日文）: {original_text}")
+
+            if (i + 1) % save_frequency == 0:
+                print(f"达到{save_frequency}行，保存进度和文件...")
+                save_progress(i + 1,task_list)
+                with open(task_name, 'w', encoding='utf-8') as file:
+                    json.dump(data, file, ensure_ascii=False, indent=4)
+                print("保存完成.")
+        task_list.pop(0)
+        save_progress(0,task_list)
+        with open(task_name, 'w', encoding='utf-8') as file:
+            json.dump(data, file, ensure_ascii=False, indent=4)
+        print(f"文件{task_name}翻译完成.")
+        
     # 翻译完成后进度重置
-    save_progress(0)
+    save_progress(0,[])
     print("All done.")
+    if shutdown == 1:
+        print("翻译完成，将在一分钟后关机...")
+        shutdown_pc()
 
 if __name__ == "__main__":
     main()
