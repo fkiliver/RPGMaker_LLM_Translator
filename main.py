@@ -90,7 +90,10 @@ def translate_text(text, index, attempt=1):
         print(f'请求翻译API错误: {e}')
         return text
     # 获取响应的内容
-    translated_text = response.json()["choices"][0]["message"]["content"]
+    if api_type == 0 :
+        translated_text = response.json()["content"]
+    else :
+        translated_text = response.json()["choices"][0]["message"]["content"]
 
     if is_repetitive(translated_text):
         return translate_text(text, index, attempt + 1)
