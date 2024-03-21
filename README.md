@@ -19,3 +19,5 @@
 
 ## 快速开始
 ### 部署教程：详见[本仓库wiki](https://github.com/fkiliver/RPGMaker_LLM_Translator/wiki)
+![Uploading image.png…]()
+
