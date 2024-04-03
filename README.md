@@ -16,6 +16,8 @@
 - [ ] 去除翻译结果结尾处句号
 - [ ] 添加对sakura v0.10支持
 - [ ] 去除对sakura v0.9/v0.8支持
+- [ ] 添加GUI
+- [ ] 添加换行符分割
 
 ## 快速开始
 ### 部署教程：详见[本仓库wiki](https://github.com/fkiliver/RPGMaker_LLM_Translator/wiki)
