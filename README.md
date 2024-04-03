@@ -1,41 +1,25 @@
+<div align="center">
+<h1>
+  RPGMaker_LLM_Translator
+</h1>
+</div>
+
 # 介绍
-这是一个基于Mtool和Sakura模型的RPGMaker游戏本地翻译器  
-通过Mtool导入导出翻译文本，通过Sakura模型翻译日语文本  
-经测试支持的模型：Sakura v0.8/Sakura v0.9  
-建议使用Sakura v0.9b https://huggingface.co/SakuraLLM/Sakura-13B-LNovel-v0.9b-GGUF/tree/main
+这是一个基于Mtool和Sakura模型的RPGMaker游戏本地翻译器，能够提供高质量离线日文翻译  
+建议使用[Sakura-13B-Galgame翻译模型](https://github.com/SakuraLLM/Sakura-13B-Galgame)，当前支持版本为Sakura v0.8/v0.9/v0.10pre0
 
-# 准备
-首先参考Mtool文档完成对翻译文本的导出：[Mtool](https://afdian.net/a/AdventCirno)  
-然后参考Sakura模型文档完成本地部署：[Sakura模型本地部署教程](https://github.com/SakuraLLM/Sakura-13B-Galgame/wiki)  
+## TODO
+- [ ] 添加退化检测
+- [ ] 添加历史上文
+- [ ] 添加prompt字典
+- [ ] 添加并发
+- [ ] 去除翻译结果结尾处句号
+- [ ] 添加对sakura v0.10支持
+- [ ] 去除对sakura v0.9/v0.8支持
 
-# 流程
-确保Sakura服务器成功启动并监听`http://127.0.0.1:8080`
+## 快速开始
+### 部署教程：详见[本仓库wiki](https://github.com/fkiliver/RPGMaker_LLM_Translator/wiki)
+![image](https://github.com/fkiliver/RPGMaker_LLM_Translator/assets/48873439/c77d2430-9e8b-488b-bfa0-90296159740a)
 
-![image](https://github.com/fkiliver/SakuraTranslator/assets/48873439/a69e74a6-f789-4de2-9ce5-d73209f2843c)
 
-使用MTool启动游戏并导出待翻译的原文  
 
-![image](https://github.com/fkiliver/SakuraTranslator/assets/48873439/bc00335f-751e-4252-98bc-8b807640c400)
-
-复制项目内所有文件放置在Mtool导出的`ManualTransFile.json`同级目录下  
-在目录下打开windows终端\Powershell
-
-安装库：
-
-```shell
-pip install -r requirements.txt
-```
-
-运行`main.py`：
-
-```shell
-python main.py
-```
-
-程序会自动开始翻译同级目录下的`ManualTransFile.json`
-
-![image](https://github.com/fkiliver/SakuraTranslator/assets/48873439/8699c9c8-ba52-43af-8a42-c86686340ff1)
-
-每翻译100行会保存当前翻译进度，下次启动翻译器时会从中断位置继续翻译
-
-翻译完成后通过Mtool加载翻译文件`ManualTransFile.json`即可完成翻译  
