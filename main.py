@@ -33,6 +33,30 @@ def generate_random_string(length=2):
     # 生成一个随机的五位英文字符字符串
     return ''.join(random.choices(string.ascii_letters, k=length))
 
+def split_text_with_newlines(text):
+    # 以换行符分割文本
+    paragraphs = re.split(r'(\r\n|\r|\n)', text)
+    return paragraphs
+
+def translate_text_by_paragraph(text, index):
+    segments = split_text_with_newlines(text)
+    # 初始化变量来存储翻译后的文本和当前处理的换行符
+    translated_segments = []
+    for segment in segments:
+        # 检查当前段落是否是换行符
+        if segment in ['\r\n', '\r', '\n']:
+            # 直接添加换行符到结果中，不进行翻译
+            translated_segments.append(segment)
+        else:
+            # 如果段落不是换行符，则进行翻译
+            if segment:  # 避免翻译空段落
+                translated_segments.append(translate_text(segment, index))
+            else:
+                translated_segments.append(segment)
+    # 将翻译后的段落和换行符重新组合成完整的文本
+    translated_text = ''.join(translated_segments)
+    return translated_text
+
 def translate_text(text, index, attempt=1):
     if attempt > 3:
         # 如果重试次数超过3次，跳过这一行
@@ -157,7 +181,7 @@ def init():
     start_index = data['last_processed']
     # 读取api信息
     if endpoint == '':
-        veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署\n[1] kaggle部署\n")
+        veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署Sakura v0.9\n[1] kaggle部署Sakura v0.9\n")
         if veri == "" :
             api_type = 0
         else:
@@ -256,7 +280,10 @@ def main():
                     time.sleep(0.1)
                     translated_text = data[keys[hash_list[text_hash]]]
                 else:
-                    translated_text = translate_text(updated_text, i)
+                    # translated_text = translate_text(updated_text, i)#直接翻译
+
+                    translated_text = translate_text_by_paragraph(updated_text, i)#分割换行符
+
                     hash_list[text_hash] = i
                 print(f"原文: {updated_text} => 翻译: {translated_text}\n\n")
                 data[key] = translated_text
