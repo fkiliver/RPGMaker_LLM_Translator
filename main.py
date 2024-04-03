@@ -52,7 +52,7 @@ def translate_text(text, index, attempt=1):
     # 构造POST请求的数据
     if api_type == 0 :
         data = {
-            "frequency_penalty": 0.2,
+            "frequency_penalty": 0.05,
             "n_predict": 1000,
             "prompt": f"<|im_start|>system\n你是一个轻小说翻译模型，可以流畅通顺地以日本轻小说的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，不擅自添加原文中没有的代词。<|im_end|>\n<|im_start|>user\n将下面的日文文本翻译成中文：{modified_text}<|im_end|>\n<|im_start|>assistant\n",
             "repeat_penalty": 1,
@@ -75,7 +75,7 @@ def translate_text(text, index, attempt=1):
             "temperature": 0.1,
             "top_p": 0.3,
             "max_tokens":1000,
-            "frequency_penalty":0.2,
+            "frequency_penalty":0.05,
             "do_sample": "false",
             "top_k": 40,
             "um_beams": 1,
