@@ -230,11 +230,7 @@ def main():
         print("读取完成.")
 
         keys = list(data.keys())
-        hash_list = {}
         
-        # 将之前已经翻译过的文本的哈希值存入列表
-        for i in range(start_index):
-            hash_list[Jp_hash(data[keys[i]])] = i
         print('开始翻译...')
 
         # 使用tqdm创建进度条
@@ -244,17 +240,7 @@ def main():
             original_text = data[key]
             contains_jp, updated_text = contains_japanese(original_text)
             if contains_jp:
-                # 计算字符串的哈希值，并检查是否重复
-                text_hash = Jp_hash(updated_text)
-                if text_hash in hash_list:
-                    print("翻译结果重复，跳过...")
-                    time.sleep(0.1)
-                    translated_text = data[keys[hash_list[text_hash]]]
-                else:
-                    # translated_text = translate_text(updated_text, i)#直接翻译
-                    translated_text = translate_text_by_paragraph(updated_text, i) #以换行符作为分割点多次提交
-
-                    hash_list[text_hash] = i
+                translated_text = translate_text_by_paragraph(updated_text, i) #以换行符作为分割点多次提交
                 print(f"原文: {updated_text} => 翻译: {translated_text}\n\n")
                 data[key] = translated_text
             else:
