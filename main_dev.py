@@ -22,34 +22,38 @@ def log_repetitive(index):
     with open('log.txt', 'a', encoding='utf-8') as file:
         file.write(f"异常行号：{index+2}\n")
 
-def generate_random_string(length=2):
-    # 生成一个随机的五位英文字符字符串
-    return ''.join(random.choices(string.ascii_letters, k=length))
-
 def split_text_with_newlines(text):
     # 以换行符分割文本
     paragraphs = re.split(r'(\r\n|\r|\n)', text)
     return paragraphs
 
 def translate_text_by_paragraph(text, index):
-    segments = split_text_with_newlines(text)
-    # 初始化变量来存储翻译后的文本和当前处理的换行符
-    translated_segments = []
-    for segment in segments:
-        # 检查当前段落是否是换行符
-        if segment in ['\r\n', '\r', '\n']:
-            # 直接添加换行符到结果中，不进行翻译
-            translated_segments.append(segment)
-        else:
-            # 如果段落不是换行符，则进行翻译
-            if segment:  # 避免翻译空段落
-                translated_segments.append(translate_text(segment, index))
-            else:
+    #检查是否包含日文，并将半角假名转换为全角假名
+    contains_jp, updated_text = contains_japanese(text)
+
+    if contains_jp:
+        segments = split_text_with_newlines(updated_text)
+        # 初始化变量来存储翻译后的文本和当前处理的换行符
+        translated_segments = []
+        for segment in segments:
+            # 检查当前段落是否是换行符
+            if segment in ['\r\n', '\r', '\n']:
+                # 直接添加换行符到结果中，不进行翻译
                 translated_segments.append(segment)
-    # 将翻译后的段落和换行符重新组合成完整的文本
-    translated_text = ''.join(translated_segments)
-    print(f"索引：第{index}行|原文: {text} => 翻译: {translated_text}\n\n")
-    return translated_text
+            else:
+                # 如果段落不是换行符，则进行翻译
+                if segment:  # 避免翻译空段落
+                    translated_segments.append(translate_text(segment, index))
+                else:
+                    translated_segments.append(segment)
+        # 将翻译后的段落和换行符重新组合成完整的文本
+        translated_text = ''.join(translated_segments)
+        print(f"索引：第{index}行|原文: {text} => 翻译: {translated_text}\n\n")
+        return translated_text
+    
+    else:
+        print(f"索引：第{index}行|原文: {text} 不包含日文，跳过\n\n")
+        return text
 
 def translate_text(text, index, attempt=1):
     if attempt > 3:

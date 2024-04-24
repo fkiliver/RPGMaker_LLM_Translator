@@ -21,10 +21,6 @@ def log_repetitive(index):
     with open('log.txt', 'a', encoding='utf-8') as file:
         file.write(f"异常行号：{index+2}\n")
 
-def generate_random_string(length=2):
-    # 生成一个随机的五位英文字符字符串
-    return ''.join(random.choices(string.ascii_letters, k=length))
-
 def split_text_with_newlines(text):
     # 以换行符分割文本
     paragraphs = re.split(r'(\r\n|\r|\n)', text)
