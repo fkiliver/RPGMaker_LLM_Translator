@@ -125,12 +125,13 @@ def init():
             "endpoint": "",
             "api_type": 0,
             "save_frequency": 100,
-            "shutdown": 0
+            "shutdown": 0,
+            "max_workers": 1
         }
         with open("config.json", 'w') as file:
             json.dump(config_data, file, indent=4)
     # 读取配置文件
-    global api_type, endpoint, save_frequency, shutdown, task_list, start_index
+    global api_type, endpoint, save_frequency, shutdown, task_list, start_index, max_workers
     with open('config.json', 'r', encoding='utf-8') as file:
         data=json.load(file)
     endpoint = data['endpoint']
@@ -139,6 +140,7 @@ def init():
     shutdown = data['shutdown']
     task_list = data['task_list']
     start_index = data['last_processed']
+    max_workers = data['max_workers']
     # 读取api信息
     if endpoint == '':
         veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署Sakura v0.9\n[1] kaggle部署Sakura v0.9\n")
@@ -196,6 +198,13 @@ def init():
         else:
             shutdown = int(veri)
         data['shutdown'] = shutdown
+        # 多线程
+        veri = input("请输入翻译线程数(默认为1):\n")
+        if veri == "" :
+            max_workers = 1
+        else:
+            max_workers = int(veri)
+        data['max_workers'] = max_workers
     else:
         print(f"已加载任务列表{task_list},保存频率为{save_frequency},自动关机状态为{shutdown}")
     # 保存配置
@@ -238,7 +247,7 @@ def main():
         print(f'开始翻译{task_name}, 从第{start_from + 1}行开始...')
 
         # 创建线程池
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # 提交翻译任务
             future_to_key = {executor.submit(translate_text_by_paragraph, data[key], i): key for i, key in enumerate(keys[start_from:], start=start_from)}
 
