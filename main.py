@@ -15,11 +15,23 @@ def contains_japanese(text):
     # 检查文本是否包含日文字符
     return bool(re.search(r'[\u3040-\u30ff\u3400-\u4DBF\u4E00-\u9FFF]', text)), text
 
+def contains_chinese(text):
+    # 检查文本是否包含中文字符
+    return bool(re.search(r'[\u4e00-\u9fff]', text))
+
+def is_repetitive(text):
+    # 检查文本是否包含重复的字或句子
+    return re.search(r'((.|\n)+?)(?:\1){15,}', text) is not None
+
 def log_repetitive(index):
     print("存在翻译异常，记录至log.txt...")
     # 记录异常的行号到log.txt
     with open('log.txt', 'a', encoding='utf-8') as file:
         file.write(f"异常行号：{index+2}\n")
+
+def generate_random_string(length=2):
+    # 生成一个随机的五位英文字符字符串
+    return ''.join(random.choices(string.ascii_letters, k=length))
 
 def split_text_with_newlines(text):
     # 以换行符分割文本
@@ -51,14 +63,22 @@ def translate_text(text, index, attempt=1):
         log_repetitive(index)
         return text
 
-    print(f"提交的文本为：{text}")
+    # 重试时加上随机字符
+    if attempt > 1:
+        random_string = generate_random_string()
+        print(f"添加随机字符串重试：{random_string}")
+        modified_text = random_string + text
+    else:
+        modified_text = text
+
+    print(f"提交的文本为：{modified_text}")
     
     # 构造POST请求的数据
     if api_type == 0 :
         data = {
             "frequency_penalty": 0.05,
             "n_predict": 1000,
-            "prompt": f"<|im_start|>system\n你是一个轻小说翻译模型，可以流畅通顺地以日本轻小说的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，不擅自添加原文中没有的代词。<|im_end|>\n<|im_start|>user\n将下面的日文文本翻译成中文：{text}<|im_end|>\n<|im_start|>assistant\n",
+            "prompt": f"<|im_start|>system\n你是一个轻小说翻译模型，可以流畅通顺地以日本轻小说的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，不擅自添加原文中没有的代词。<|im_end|>\n<|im_start|>user\n将下面的日文文本翻译成中文：{modified_text}<|im_end|>\n<|im_start|>assistant\n",
             "repeat_penalty": 1,
             "temperature": 0.1,
             "top_k": 40,
@@ -73,7 +93,7 @@ def translate_text(text, index, attempt=1):
                 },
                 {
                     "role": "user",
-                    "content": f"将下面的日文文本翻译成中文：{text}"
+                    "content": f"将下面的日文文本翻译成中文：{modified_text}"
                 }
             ],
             "temperature": 0.1,
@@ -99,9 +119,22 @@ def translate_text(text, index, attempt=1):
     else :
         translated_text = response.json()["choices"][0]["message"]["content"]
 
+    if is_repetitive(translated_text):
+        return translate_text(text, index, attempt + 1)
+
     # 去除翻译结果中不希望出现的特定字符串
     unwanted_string = "将下面的日文文本翻译成中文："
     translated_text = translated_text.replace(unwanted_string, "")
+
+    # 如果结果不含中文
+    if not contains_chinese(translated_text):
+        print(translated_text)
+        print("翻译结果不含中文，重试...")
+        return translate_text(text, index, attempt + 1)
+
+    # 去除随机字符
+    if attempt > 1:
+        translated_text = translated_text.replace(random_string, "")
     
     # 去除高版本llama.cpp结尾的<|im_end|>
     translated_text = translated_text.replace("<|im_end|>", "")
@@ -215,6 +248,28 @@ def shutdown_pc():
     else:
         os.system('shutdown -h 1')
 
+# 创建一个历史记录数据结构
+history = []
+
+# 添加新的翻译到历史记录
+def add_to_history(original_text, translated_text):
+    history.append({
+        'original': original_text,
+        'translated': translated_text
+    })
+
+# 显示历史记录
+def show_history():
+    for record in history:
+        print(f"Original: {record['original']}, Translated: {record['translated']}")
+
+# 允许用户修改历史记录
+def modify_history(index, new_translation):
+    if 0 <= index < len(history):
+        history[index]['translated'] = new_translation
+    else:
+        print("Invalid index.")
+
 def main():
     init()              
     while task_list != []:
@@ -226,7 +281,11 @@ def main():
         print("读取完成.")
 
         keys = list(data.keys())
+        hash_list = {}
         
+        # 将之前已经翻译过的文本的哈希值存入列表
+        for i in range(start_index):
+            hash_list[Jp_hash(data[keys[i]])] = i
         print('开始翻译...')
 
         # 使用tqdm创建进度条
@@ -236,7 +295,22 @@ def main():
             original_text = data[key]
             contains_jp, updated_text = contains_japanese(original_text)
             if contains_jp:
-                translated_text = translate_text_by_paragraph(updated_text, i) #以换行符作为分割点多次提交
+                # 计算字符串的哈希值，并检查是否重复
+                text_hash = Jp_hash(updated_text)
+                if text_hash in hash_list:
+                    print("翻译结果重复，跳过...")
+                    time.sleep(0.1)
+                    translated_text = data[keys[hash_list[text_hash]]]
+                else:
+                    # translated_text = translate_text(updated_text, i)#直接翻译
+
+                    translated_text = translate_text_by_paragraph(updated_text, i)#分割换行符
+
+                    hash_list[text_hash] = i
+
+                # 在这里添加历史记录
+                add_to_history(updated_text, translated_text)
+
                 print(f"原文: {updated_text} => 翻译: {translated_text}\n\n")
                 data[key] = translated_text
             else:
