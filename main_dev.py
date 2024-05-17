@@ -1,4 +1,6 @@
 import json
+from idlelib import history
+
 import requests
 import re
 import os
@@ -27,7 +29,7 @@ def split_text_with_newlines(text):
     paragraphs = re.split(r'(\r\n|\r|\n)', text)
     return paragraphs
 
-def translate_text_by_paragraph(text, index):
+def translate_text_by_paragraph(text, index, history):
     #检查是否包含日文，并将半角假名转换为全角假名
     contains_jp, updated_text = contains_japanese(text)
 
@@ -43,7 +45,10 @@ def translate_text_by_paragraph(text, index):
             else:
                 # 如果段落不是换行符，则进行翻译
                 if segment:  # 避免翻译空段落
-                    translated_segments.append(translate_text(segment, index))
+                    translated_segment = translate_text(segment, index)
+                    translated_segments.append(translated_segment)
+                    # 更新历史上文
+                    history.append(translated_segment)
                 else:
                     translated_segments.append(segment)
         # 将翻译后的段落和换行符重新组合成完整的文本
@@ -252,8 +257,10 @@ def main():
 
         # 创建线程池
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # 初始化历史上文
+            history = []
             # 提交翻译任务
-            future_to_key = {executor.submit(translate_text_by_paragraph, data[key], i): key for i, key in enumerate(keys[start_from:], start=start_from)}
+            future_to_key = {executor.submit(translate_text_by_paragraph, data[key], i, history): key for i, key in enumerate(keys[start_from:], start=start_from)}
 
             # 创建进度条
             for future in tqdm(as_completed(future_to_key), total=len(future_to_key), desc="任务进度"):
@@ -262,6 +269,8 @@ def main():
                 try:
                     # 获取翻译结果并更新数据
                     data[key] = future.result()
+                    # 更新历史上文
+                    history.append(data[key])
                     if (index + 1) % save_frequency == 0 or index + 1 == total_keys:
                         print(f"保存进度于索引 {index + 1}")
                         save_progress(data, task_name, index + 1, task_list)
