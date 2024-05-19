@@ -54,7 +54,7 @@ def translate_text(text, index, attempt=1):
     print(f"提交的文本为：{text}")
     
     # 构造POST请求的数据
-    if api_type == 0 :
+    if api_type == 0 or api_type == 2:
         data = {
             "frequency_penalty": 0.05,
             "n_predict": 1000,
@@ -96,6 +96,8 @@ def translate_text(text, index, attempt=1):
     # 获取响应的内容
     if api_type == 0 :
         translated_text = response.json()["content"]
+    elif api_type == 2:
+        translated_text = response.json()['choices'][0]['text']
     else :
         translated_text = response.json()["choices"][0]["message"]["content"]
 
@@ -148,7 +150,7 @@ def init():
     start_index = data['last_processed']
     # 读取api信息
     if endpoint == '':
-        veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署Sakura v0.9\n[1] kaggle部署Sakura v0.9\n")
+        veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署Sakura v0.9\n[1] kaggle部署Sakura v0.9 \n[2]text-generation-webui\n")
         if veri == "" :
             api_type = 0
         else:
@@ -159,6 +161,13 @@ def init():
             verurl = input("请输入Api地址(默认为http://127.0.0.1:8080/completion):\n")
             if verurl == "" :
                 endpoint = "http://127.0.0.1:8080/completion"
+            else:
+                endpoint = verurl
+            data['endpoint'] = endpoint
+        elif api_type == 2:
+            verurl = input("请输入Api地址(默认为http://127.0.0.1:5000/v1/completions):\n")
+            if verurl == "" :
+                endpoint = "http://127.0.0.1:5000/v1/completions"
             else:
                 endpoint = verurl
             data['endpoint'] = endpoint
