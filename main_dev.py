@@ -27,7 +27,7 @@ def split_text_with_newlines(text):
     paragraphs = re.split(r'(\r\n|\r|\n)', text)
     return paragraphs
 
-def translate_text_by_paragraph(text, index, api_idx=0):
+def translate_text_by_paragraph(text, index):
     #检查是否包含日文，并将半角假名转换为全角假名
     contains_jp, updated_text = contains_japanese(text)
 
@@ -43,7 +43,7 @@ def translate_text_by_paragraph(text, index, api_idx=0):
             else:
                 # 如果段落不是换行符，则进行翻译
                 if segment:  # 避免翻译空段落
-                    translated_segments.append(translate_text(segment, index, api_idx=api_idx))
+                    translated_segments.append(translate_text(segment, index))
                 else:
                     translated_segments.append(segment)
         # 将翻译后的段落和换行符重新组合成完整的文本
@@ -55,7 +55,7 @@ def translate_text_by_paragraph(text, index, api_idx=0):
         print(f"索引：第{index}行|原文: {text} 不包含日文，跳过\n\n")
         return text
 
-def translate_text(text, index, attempt=1, api_idx=0):
+def translate_text(text, index, attempt=1):
     if attempt > 3:
         # 如果重试次数超过3次，跳过这一行
         log_repetitive(index)
@@ -96,7 +96,7 @@ def translate_text(text, index, attempt=1, api_idx=0):
 
     # 发送POST请求
     try:
-        response = requests.post(endpoint[api_idx], json=data)
+        response = requests.post(endpoint, json=data)
         response.raise_for_status()
     except requests.RequestException as e:
         print(f'请求翻译API错误: {e}')
@@ -128,7 +128,7 @@ def init():
         config_data = {
             "last_processed": 0,
             "task_list": [],
-            "endpoint": [],
+            "endpoint": "",
             "api_type": 0,
             "save_frequency": 100,
             "shutdown": 0,
@@ -148,38 +148,36 @@ def init():
     start_index = data['last_processed']
     max_workers = data['max_workers']
     # 读取api信息
-    if endpoint == []:
-        veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署Sakura v0.9\n[1] kaggle部署Sakura v0.9 \n[2] text-generation-webui\n")
+    if endpoint == '':
+        veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署Sakura v0.9\n[1] kaggle部署Sakura v0.9 \n[2]text-generation-webui\n")
         if veri == "" :
             api_type = 0
         else:
             api_type = int(veri)
         data['api_type'] = api_type
-        if(api_type == 0 or api_type == 2):
-            api_num = input("输入同时使用的API数量？(默认为1)\n")
-        for i in range(1, int(api_num)+1):
-            if api_type == 0 :
-                verurl = input(f"请输入第{i}个Api地址(默认为http://127.0.0.1:8080/completion):\n")
-                if verurl == "" :
-                    endpoint.append("http://127.0.0.1:8080/completion")
-                else:
-                    endpoint.append(verurl)
-                data['endpoint'] = endpoint
-            elif api_type == 2:
-                verurl = input(f"请输入第{i}个Api地址(默认为http://127.0.0.1:5000/v1/completions):\n")
-                if verurl == "" :
-                    endpoint.append("http://127.0.0.1:5000/v1/completions")
-                else:
-                    endpoint.append(verurl)
-                data['endpoint'] = endpoint
+
+        if api_type == 0 :
+            verurl = input("请输入Api地址(默认为http://127.0.0.1:8080/completion):\n")
+            if verurl == "" :
+                endpoint = "http://127.0.0.1:8080/completion"
+            else:
+                endpoint = verurl
+            data['endpoint'] = endpoint
+        elif api_type == 2:
+            verurl = input("请输入Api地址(默认为http://127.0.0.1:5000/v1/completions):\n")
+            if verurl == "" :
+                endpoint = "http://127.0.0.1:5000/v1/completions"
+            else:
+                endpoint = verurl
+            data['endpoint'] = endpoint
+        else :
+            verurl = input("请输入Api地址(例如https://114-514-191-810.ngrok-free.app):\n")
+            if verurl == "" :
+                print("必须提供Api地址！")
+                sys.exit()
             else :
-                verurl = input(f"请输入第{i}个Api地址(例如https://114-514-191-810.ngrok-free.app):\n")
-                if verurl == "" :
-                    print("必须提供Api地址！")
-                    sys.exit()
-                else :
-                    endpoint.append(verurl+"/v1/chat/completions")
-                    data['endpoint'] = endpoint
+                endpoint = verurl+"/v1/chat/completions"
+                data['endpoint'] = endpoint
         print("配置已保存到config.json,下次启动将默认加载")
     # 读取任务列表,保存频率,自动关机信息
     if task_list == []:
@@ -253,7 +251,7 @@ def main():
         with open(task_name, 'r', encoding='utf-8') as file:
             data = json.load(file)
         print("读取完成.")
-        api_num = len(endpoint)
+
         keys = list(data.keys())
         
         total_keys = len(keys)
@@ -264,12 +262,7 @@ def main():
         # 创建线程池
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # 提交翻译任务
-            # future_to_key = {executor.submit(translate_text_by_paragraph, data[key], i): key for i, key in enumerate(keys[start_from:], start=start_from)}
-            future_to_key = {
-                executor.submit(translate_text_by_paragraph, data[key], i, i % api_num,): key
-                for i, key in enumerate(keys[start_from:], start=start_from)
-            }
-
+            future_to_key = {executor.submit(translate_text_by_paragraph, data[key], i): key for i, key in enumerate(keys[start_from:], start=start_from)}
 
             # 创建进度条
             for future in tqdm(as_completed(future_to_key), total=len(future_to_key), desc="任务进度"):
