@@ -249,8 +249,9 @@ def shutdown_pc():
 
 def save_progress(data, filename, index, task_list):
     # 保存当前的进度
-    with open(filename, 'w', encoding='utf-8') as file:
-        json.dump(data, file, ensure_ascii=False, indent=4)
+    save_json_safely(data, filename)
+    # with open(filename, 'w', encoding='utf-8') as file:
+        # json.dump(data, file, ensure_ascii=False, indent=4)
     with open('config.json', 'r+', encoding='utf-8') as file:
         config_data = json.load(file)
         config_data['last_processed'] = index
@@ -258,6 +259,12 @@ def save_progress(data, filename, index, task_list):
         file.seek(0)
         json.dump(config_data, file, indent=4)
         file.truncate()
+
+def save_json_safely(data, task_name):
+    temp_task_name = task_name + '.tmp'
+    with open(temp_task_name, 'w', encoding='utf-8') as file:
+        json.dump(data, file, ensure_ascii=False, indent=4)
+    os.replace(temp_task_name, task_name)  # 替换原文件
 
 def main():
     global semaphores

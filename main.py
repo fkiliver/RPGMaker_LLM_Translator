@@ -226,6 +226,12 @@ def shutdown_pc():
     else:
         os.system('shutdown -h 1')
 
+def save_json_safely(data, task_name):
+    temp_task_name = task_name + '.tmp'
+    with open(temp_task_name, 'w', encoding='utf-8') as file:
+        json.dump(data, file, ensure_ascii=False, indent=4)
+    os.replace(temp_task_name, task_name)  # 替换原文件
+
 def main():
     init()              
     while task_list != []:
@@ -256,13 +262,15 @@ def main():
             if (i + 1) % save_frequency == 0:
                 print(f"达到{save_frequency}行，保存进度和文件...")
                 save_progress(i + 1,task_list)
-                with open(task_name, 'w', encoding='utf-8') as file:
-                    json.dump(data, file, ensure_ascii=False, indent=4)
+                # with open(task_name, 'w', encoding='utf-8') as file:
+                #     json.dump(data, file, ensure_ascii=False, indent=4)
+                save_json_safely(data, task_name)
                 print("保存完成.")
         task_list.pop(0)
         save_progress(0,task_list)
-        with open(task_name, 'w', encoding='utf-8') as file:
-            json.dump(data, file, ensure_ascii=False, indent=4)
+        # with open(task_name, 'w', encoding='utf-8') as file:
+        #     json.dump(data, file, ensure_ascii=False, indent=4)
+        save_json_safely(data, task_name)
         print(f"文件{task_name}翻译完成.")
         
     # 翻译完成后进度重置
