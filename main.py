@@ -88,7 +88,7 @@ def translate_text(text, index, attempt=1):
 
     # 发送POST请求
     try:
-        response = requests.post(endpoint, json=data)
+        response = requests.post(endpoint[0], json=data)
         response.raise_for_status()
     except requests.RequestException as e:
         print(f'请求翻译API错误: {e}')
@@ -131,10 +131,11 @@ def init():
         config_data = {
             "last_processed": 0,
             "task_list": [],
-            "endpoint": "",
+            "endpoint": [],
             "api_type": 0,
             "save_frequency": 100,
-            "shutdown": 0
+            "shutdown": 0,
+            "max_workers": 1
         }
         with open("config.json", 'w') as file:
             json.dump(config_data, file, indent=4)
@@ -163,14 +164,14 @@ def init():
                 endpoint = "http://127.0.0.1:8080/completion"
             else:
                 endpoint = verurl
-            data['endpoint'] = endpoint
+            data['endpoint'].append(endpoint)
         elif api_type == 2:
             verurl = input("请输入Api地址(默认为http://127.0.0.1:5000/v1/completions):\n")
             if verurl == "" :
                 endpoint = "http://127.0.0.1:5000/v1/completions"
             else:
                 endpoint = verurl
-            data['endpoint'] = endpoint
+            data['endpoint'].append(endpoint)
         else :
             verurl = input("请输入Api地址(例如https://114-514-191-810.ngrok-free.app):\n")
             if verurl == "" :
@@ -178,7 +179,7 @@ def init():
                 sys.exit()
             else :
                 endpoint = verurl+"/v1/chat/completions"
-                data['endpoint'] = endpoint
+                data['endpoint'].append(endpoint)
         print("配置已保存到config.json,下次启动将默认加载")
     # 读取任务列表,保存频率,自动关机信息
     if task_list == []:
