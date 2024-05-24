@@ -88,7 +88,7 @@ def translate_text(text, index, attempt=1):
 
     # 发送POST请求
     try:
-        response = requests.post(endpoint, json=data)
+        response = requests.post(endpoint[0], json=data)
         response.raise_for_status()
     except requests.RequestException as e:
         print(f'请求翻译API错误: {e}')
@@ -131,10 +131,12 @@ def init():
         config_data = {
             "last_processed": 0,
             "task_list": [],
-            "endpoint": "",
+            "endpoint": [],
             "api_type": 0,
             "save_frequency": 100,
-            "shutdown": 0
+            "shutdown": 0,
+            "max_workers": 1,
+            "use_lock": 0
         }
         with open("config.json", 'w') as file:
             json.dump(config_data, file, indent=4)
@@ -149,7 +151,7 @@ def init():
     task_list = data['task_list']
     start_index = data['last_processed']
     # 读取api信息
-    if endpoint == '':
+    if endpoint == []:
         veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署Sakura v0.9\n[1] kaggle部署Sakura v0.9 \n[2]text-generation-webui\n")
         if veri == "" :
             api_type = 0
@@ -163,14 +165,14 @@ def init():
                 endpoint = "http://127.0.0.1:8080/completion"
             else:
                 endpoint = verurl
-            data['endpoint'] = endpoint
+            data['endpoint'].append(endpoint)
         elif api_type == 2:
             verurl = input("请输入Api地址(默认为http://127.0.0.1:5000/v1/completions):\n")
             if verurl == "" :
                 endpoint = "http://127.0.0.1:5000/v1/completions"
             else:
                 endpoint = verurl
-            data['endpoint'] = endpoint
+            data['endpoint'].append(endpoint)
         else :
             verurl = input("请输入Api地址(例如https://114-514-191-810.ngrok-free.app):\n")
             if verurl == "" :
@@ -178,7 +180,7 @@ def init():
                 sys.exit()
             else :
                 endpoint = verurl+"/v1/chat/completions"
-                data['endpoint'] = endpoint
+                data['endpoint'].append(endpoint)
         print("配置已保存到config.json,下次启动将默认加载")
     # 读取任务列表,保存频率,自动关机信息
     if task_list == []:
@@ -224,6 +226,12 @@ def shutdown_pc():
     else:
         os.system('shutdown -h 1')
 
+def save_json_safely(data, task_name):
+    temp_task_name = task_name + '.tmp'
+    with open(temp_task_name, 'w', encoding='utf-8') as file:
+        json.dump(data, file, ensure_ascii=False, indent=4)
+    os.replace(temp_task_name, task_name)  # 替换原文件
+
 def main():
     init()              
     while task_list != []:
@@ -254,13 +262,15 @@ def main():
             if (i + 1) % save_frequency == 0:
                 print(f"达到{save_frequency}行，保存进度和文件...")
                 save_progress(i + 1,task_list)
-                with open(task_name, 'w', encoding='utf-8') as file:
-                    json.dump(data, file, ensure_ascii=False, indent=4)
+                # with open(task_name, 'w', encoding='utf-8') as file:
+                #     json.dump(data, file, ensure_ascii=False, indent=4)
+                save_json_safely(data, task_name)
                 print("保存完成.")
         task_list.pop(0)
         save_progress(0,task_list)
-        with open(task_name, 'w', encoding='utf-8') as file:
-            json.dump(data, file, ensure_ascii=False, indent=4)
+        # with open(task_name, 'w', encoding='utf-8') as file:
+        #     json.dump(data, file, ensure_ascii=False, indent=4)
+        save_json_safely(data, task_name)
         print(f"文件{task_name}翻译完成.")
         
     # 翻译完成后进度重置
