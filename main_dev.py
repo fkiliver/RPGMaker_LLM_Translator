@@ -152,7 +152,7 @@ def init():
     use_lock = data['use_lock']
     # 读取api信息
     if endpoint == []:
-        veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署Sakura v0.9\n[1] kaggle部署Sakura v0.9 \n[2]text-generation-webui\n")
+        veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署Sakura v0.9\n[1] kaggle部署Sakura v0.9 \n[2] text-generation-webui\n")
         if veri == "" :
             api_type = 0
         else:
@@ -169,25 +169,23 @@ def init():
             if api_type == 0 :
                 verurl = input("请输入Api地址(默认为http://127.0.0.1:8080/completion):\n")
                 if verurl == "" :
-                    endpoint = "http://127.0.0.1:8080/completion"
+                    endpoint.append("http://127.0.0.1:8080/completion")
                 else:
-                    endpoint = verurl
-                data['endpoint'].append(endpoint)
+                    endpoint.append(verurl)
             elif api_type == 2:
                 verurl = input("请输入Api地址(默认为http://127.0.0.1:5000/v1/completions):\n")
                 if verurl == "" :
-                    endpoint = "http://127.0.0.1:5000/v1/completions"
+                    endpoint.append("http://127.0.0.1:5000/v1/completions")
                 else:
-                    endpoint = verurl
-                data['endpoint'].append(endpoint)
+                    endpoint.append(verurl)
             else :
                 verurl = input("请输入Api地址(例如https://114-514-191-810.ngrok-free.app):\n")
                 if verurl == "" :
                     print("必须提供Api地址！")
                     sys.exit()
                 else :
-                    endpoint = verurl+"/v1/chat/completions"
-                    data['endpoint'].append(endpoint)
+                    endpoint.append(verurl+"/v1/chat/completions")
+            data['endpoint']=endpoint
         if(api_type > 1):
             veri = input("是否让每一个API一次只进行一个翻译？(默认为0):\n[0] 否，一个API同时进行多个翻译\n[1] 是\n")
             if veri == "" :
