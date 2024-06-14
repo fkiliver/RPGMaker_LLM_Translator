@@ -205,7 +205,7 @@ def init():
             if os.path.exists(str(file_name)) == 0:
                 print(f"文件{file_name}不存在，请重新输入")
                 continue
-            
+
             if os.path.isdir(str(file_name)):
                 for root, dirs, files in os.walk(str(file_name)):
                     for file in files:
@@ -263,16 +263,17 @@ def main():
     while task_list != []:
         # 读取JSON或CSV文件
         task_name = task_list[0]
+        json_keys = []
         print(f"开始翻译{task_name},正在读取文件...")
         if task_name.endswith(".json"):
             with open(task_name, 'r', encoding='utf-8') as file:
                 data = json.load(file)
+            json_keys = list(data.keys())
         elif task_name.endswith(".csv"):
             data = pd.read_csv(task_name, encoding='utf-8')
             data['Original Text'] = data['Original Text'].astype(str)
             data['Machine translation'] = data['Machine translation'].astype(str)
         print("读取完成.") 
-        json_keys = list(data.keys())
         print('开始翻译...')
         # 使用tqdm创建进度条
         for i in tqdm(range(start_index, len(data)), desc="任务进度"):
