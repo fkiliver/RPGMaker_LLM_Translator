@@ -2,11 +2,10 @@ import json
 import requests
 import re
 import os
-import random
-import string
+import pandas as pd
 from tqdm import tqdm
 import unicodedata
-import time
+import csv
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
@@ -152,7 +151,7 @@ def init():
     use_lock = data['use_lock']
     # 读取api信息
     if endpoint == []:
-        veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署Sakura v0.9\n[1] kaggle部署Sakura v0.9 \n[2]text-generation-webui\n")
+        veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署Sakura v0.9\n[1] kaggle部署Sakura v0.9 \n[2] text-generation-webui\n")
         if veri == "" :
             api_type = 0
         else:
@@ -169,25 +168,23 @@ def init():
             if api_type == 0 :
                 verurl = input("请输入Api地址(默认为http://127.0.0.1:8080/completion):\n")
                 if verurl == "" :
-                    endpoint = "http://127.0.0.1:8080/completion"
+                    endpoint.append("http://127.0.0.1:8080/completion")
                 else:
-                    endpoint = verurl
-                data['endpoint'].append(endpoint)
+                    endpoint.append(verurl)
             elif api_type == 2:
                 verurl = input("请输入Api地址(默认为http://127.0.0.1:5000/v1/completions):\n")
                 if verurl == "" :
-                    endpoint = "http://127.0.0.1:5000/v1/completions"
+                    endpoint.append("http://127.0.0.1:5000/v1/completions")
                 else:
-                    endpoint = verurl
-                data['endpoint'].append(endpoint)
+                    endpoint.append(verurl)
             else :
                 verurl = input("请输入Api地址(例如https://114-514-191-810.ngrok-free.app):\n")
                 if verurl == "" :
                     print("必须提供Api地址！")
                     sys.exit()
                 else :
-                    endpoint = verurl+"/v1/chat/completions"
-                    data['endpoint'].append(endpoint)
+                    endpoint.append(verurl+"/v1/chat/completions")
+            data['endpoint']=endpoint
         if(api_type > 1):
             veri = input("是否让每一个API一次只进行一个翻译？(默认为0):\n[0] 否，一个API同时进行多个翻译\n[1] 是\n")
             if veri == "" :
@@ -198,19 +195,31 @@ def init():
         print("配置已保存到config.json,下次启动将默认加载")
     # 读取任务列表,保存频率,自动关机信息
     if task_list == []:
-        print("请输入需要翻译的文件名，如有多个请换行输入(默认为ManualTransFile.json):")
+        print("请输入需要翻译的文件名或者文件夹名，如有多个请换行输入(默认为ManualTransFile.json):")
         while True:
             veri = input()
             if veri == "" :
-                if task_list == []:
+                if task_list == []: 
                     if os.path.exists("ManualTransFile.json") == 0:
                         print("文件ManualTransFile.json不存在")
                         sys.exit()
                     task_list = ["ManualTransFile.json"]
                 break
             file_name = veri.split("\n")[0]
+            # 判断是否是绝对路径
+            if os.path.isabs(file_name) == 0:
+                file_name = os.path.abspath(file_name)
+                       
             if os.path.exists(str(file_name)) == 0:
                 print(f"文件{file_name}不存在，请重新输入")
+                continue
+
+            if os.path.isdir(str(file_name)):
+                for root, dirs, files in os.walk(str(file_name)):
+                    for file in files:
+                        if file.endswith(".json") or file.endswith(".csv"):
+                            task_list.append(os.path.join(root, file))
+                            print(f"已添加{os.path.join(root, file)}")
             else:
                 task_list.append(file_name)
         data['task_list'] = task_list
@@ -249,7 +258,7 @@ def shutdown_pc():
 
 def save_progress(data, filename, index, task_list):
     # 保存当前的进度
-    save_json_safely(data, filename)
+    save(data, filename)
     # with open(filename, 'w', encoding='utf-8') as file:
         # json.dump(data, file, ensure_ascii=False, indent=4)
     with open('config.json', 'r+', encoding='utf-8') as file:
@@ -266,43 +275,68 @@ def save_json_safely(data, task_name):
         json.dump(data, file, ensure_ascii=False, indent=4)
     os.replace(temp_task_name, task_name)  # 替换原文件
 
+def save_csv_safely(data, task_name):
+    temp_task_name = task_name + '.tmp'
+    data.to_csv(temp_task_name, index=False, quoting=csv.QUOTE_ALL)
+    os.replace(temp_task_name, task_name)  # 替换原文件
+
+def save(data, task_name):
+    if task_name.endswith(".json"):
+        save_json_safely(data, task_name)
+    if task_name.endswith(".csv"):
+        save_csv_safely(data, task_name)
+
 def main():
     global semaphores
     init()
     while task_list:
         task_name = task_list[0]
+        json_keys = []
         print(f"正在读取文件...")
-        with open(task_name, 'r', encoding='utf-8') as file:
-            data = json.load(file)
+        if task_name.endswith(".json"):
+            with open(task_name, 'r', encoding='utf-8') as file:
+                data = json.load(file)
+            json_keys = list(data.keys())
+        elif task_name.endswith(".csv"):
+            data = pd.read_csv(task_name, encoding='utf-8')
+            data['Original Text'] = data['Original Text'].astype(str)
+            data['Machine translation'] = data['Machine translation'].astype(str)
         print("读取完成.")
 
         api_num = len(endpoint)
         semaphores = [threading.Semaphore(1) for _ in endpoint]
-        keys = list(data.keys())
         
-        total_keys = len(keys)
+        total_keys = len(data)
         start_from = start_index  # 从配置文件读取的起始索引
 
         print(f'开始翻译{task_name}, 从第{start_from + 1}行开始...')
 
         # 创建线程池
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_key = {}
-            for i, key in enumerate(keys[start_from:], start=start_from):
+            future_to_index = {}
+            for i in range(start_from, total_keys):
+                if task_name.endswith(".json"):
+                    key = json_keys[i]
+                if task_name.endswith(".csv"):
+                    key = data.loc[i, 'Original Text']
+                    
                 api_index = i % api_num
                 semaphore = semaphores[api_index] if use_lock else None
                 
                 # 使用信号量来确保每个API同一时刻只处理一个任务
-                future = executor.submit(api_task_wrapper, semaphore, translate_text_by_paragraph, data[key], i, api_index)
-                future_to_key[future] = key
+                future = executor.submit(api_task_wrapper, semaphore, translate_text_by_paragraph, key, i, api_index)
+                future_to_index[future] = i
 
             # 创建进度条
-            for future in tqdm(as_completed(future_to_key), total=len(future_to_key), desc="任务进度"):
-                key = future_to_key[future]
-                index = keys.index(key)
+            for future in tqdm(as_completed(future_to_index), total=len(future_to_index), desc="任务进度"):
+                index = future_to_index[future]
                 try:
                     # 获取翻译结果并更新数据
-                    data[key] = future.result()
+                    translated_text = future.result()
+                    if task_name.endswith(".json"):
+                        data[json_keys[index]] = translated_text
+                    if task_name.endswith(".csv"):
+                        data.loc[index, 'Machine translation'] = translated_text
                     if (index + 1) % save_frequency == 0 or index + 1 == total_keys:
                         print(f"保存进度于索引 {index + 1}")
                         save_progress(data, task_name, index + 1, task_list)

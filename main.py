@@ -93,7 +93,7 @@ def translate_text(text, index, attempt=1):
 
     # 发送POST请求
     try:
-        response = requests.post(endpoint, json=data)
+        response = requests.post(endpoint[0], json=data)
         response.raise_for_status()
     except requests.RequestException as e:
         print(f'请求翻译API错误: {e}')
@@ -136,7 +136,7 @@ def init():
         config_data = {
             "last_processed": 0,
             "task_list": [],
-            "endpoint": "",
+            "endpoint": [],
             "api_type": 0,
             "save_frequency": 100,
             "shutdown": 0,
@@ -156,7 +156,7 @@ def init():
     task_list = data['task_list']
     start_index = data['last_processed']
     # 读取api信息
-    if endpoint == "":
+    if endpoint == []:
         veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署Sakura v0.9\n[1] kaggle部署Sakura v0.9 \n[2] text-generation-webui\n")
         if veri == "" :
             api_type = 0
@@ -167,22 +167,22 @@ def init():
         if api_type == 0 :
             verurl = input("请输入Api地址(默认为http://127.0.0.1:8080/completion):\n")
             if verurl == "" :
-                endpoint = "http://127.0.0.1:8080/completion"
+                endpoint.append("http://127.0.0.1:8080/completion")
             else:
-                endpoint = verurl
+                endpoint.append(verurl)
         elif api_type == 2:
             verurl = input("请输入Api地址(默认为http://127.0.0.1:5000/v1/completions):\n")
             if verurl == "" :
-                endpoint = "http://127.0.0.1:5000/v1/completions"
+                endpoint.append("http://127.0.0.1:5000/v1/completions")
             else:
-                endpoint = verurl
+                endpoint.append(verurl)
         else :
             verurl = input("请输入Api地址(例如https://114-514-191-810.ngrok-free.app):\n")
             if verurl == "" :
                 print("必须提供Api地址！")
                 sys.exit()
             else :
-                endpoint = verurl+"/v1/chat/completions"
+                endpoint.append(verurl+"/v1/chat/completions")
         data['endpoint']=endpoint
         print("配置已保存到config.json,下次启动将默认加载")
     # 读取任务列表,保存频率,自动关机信息
@@ -204,6 +204,7 @@ def init():
                        
             if os.path.exists(str(file_name)) == 0:
                 print(f"文件{file_name}不存在，请重新输入")
+                continue
 
             if os.path.isdir(str(file_name)):
                 for root, dirs, files in os.walk(str(file_name)):
@@ -262,16 +263,17 @@ def main():
     while task_list != []:
         # 读取JSON或CSV文件
         task_name = task_list[0]
+        json_keys = []
         print(f"开始翻译{task_name},正在读取文件...")
         if task_name.endswith(".json"):
             with open(task_name, 'r', encoding='utf-8') as file:
                 data = json.load(file)
+            json_keys = list(data.keys())
         elif task_name.endswith(".csv"):
             data = pd.read_csv(task_name, encoding='utf-8')
             data['Original Text'] = data['Original Text'].astype(str)
             data['Machine translation'] = data['Machine translation'].astype(str)
         print("读取完成.") 
-        json_keys = list(data.keys())
         print('开始翻译...')
         # 使用tqdm创建进度条
         for i in tqdm(range(start_index, len(data)), desc="任务进度"):
