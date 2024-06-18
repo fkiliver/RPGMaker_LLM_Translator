@@ -164,6 +164,8 @@ def init():
                 api_num = 1
             else:
                 api_num = veri
+        else: api_num = 1
+
         for i in range(api_num):
             if api_type == 0 :
                 verurl = input("请输入Api地址(默认为http://127.0.0.1:8080/completion):\n")
