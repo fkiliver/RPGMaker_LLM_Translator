@@ -5,15 +5,15 @@
 </div>
 
 # 介绍
-这是一个基于Mtool和Sakura模型的RPGMaker游戏本地翻译器，能够提供高质量离线日文翻译  
-建议使用[Sakura-13B-Galgame翻译模型](https://github.com/SakuraLLM/Sakura-13B-Galgame)，当前支持版本为Sakura v0.8/v0.9/v0.10pre0
+这是一个基于Mtool/Translator++和Sakura模型的RPGMaker游戏本地翻译器，能够提供高质量离线日文翻译  
+建议使用[Sakura-13B-Galgame翻译模型](https://github.com/SakuraLLM/Sakura-13B-Galgame)，当前支持版本为Sakura v0.8/v0.9/v0.10pre1
 
 ## TODO
 - [ ] 添加退化检测
 - [ ] 添加历史上文
 - [ ] 添加prompt字典
 - [x] 添加并发
-- [ ] 添加对sakura v0.10支持
+- [x] 添加对sakura v0.10支持
 - [ ] 去除对sakura v0.9/v0.8支持
 - [ ] 添加GUI
 - [x] 添加换行符分割
