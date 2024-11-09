@@ -12,14 +12,12 @@
 
 ## TODO
 - [x] 添加退化检测（仅MTool）
-- [x] 添加历史上文
-- [x] 添加prompt字典
+- [x] 添加历史上文（仅MTool）
+- [x] 添加prompt字典（仅MTool）
 - [x] 添加并发
 - [x] 添加对Sakura v0.10支持
 - [x] 添加对Sakura v1.0支持
 - [x] 添加对Galtransl-v2.6支持
-- [ ] 添加GUI
-- [x] 添加换行符分割
 
 ## 快速开始
 首先需要部署Sakura模型，推荐使用Galtransl模型
