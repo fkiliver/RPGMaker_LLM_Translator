@@ -149,8 +149,6 @@ def translate_text_by_paragraph(text, index, api_idx=0, config=None, previous_tr
 
 # 调用API进行翻译
 def translate_text(text, index, api_idx=0, attempt=1, config=None, previous_translations=None):
-    if attempt > 3:
-        return text
     try:
         endpoint = config['endpoint'][api_idx]
         model_type = get_translation_model(config['model_type'], config['model_version'])
@@ -159,10 +157,24 @@ def translate_text(text, index, api_idx=0, attempt=1, config=None, previous_tran
         data = make_request_json(text, model_type, config['use_dict'], config['dict_mode'], config['dict'], context)
         response = requests.post(endpoint, json=data)
         response.raise_for_status()
+
+        response_data = response.json()
+        completion_tokens = response_data.get("usage", {}).get("completion_tokens", 0)
+        max_tokens = data["max_tokens"]
+
+        # 检查是否发生退化，重试时调整 frequency_penalty
+        if completion_tokens == max_tokens:
+            print("模型可能发生退化，调整 frequency_penalty 并重试...")
+            data["frequency_penalty"] = 0.8
+            response = requests.post(endpoint, json=data)
+            response.raise_for_status()
+            response_data = response.json()
+
     except requests.RequestException as e:
         print(f'请求翻译API错误: {e}')
-        return translate_text(text, index, api_idx, attempt + 1, config, previous_translations)
-    translated_text = response.json().get("choices")[0].get("message", {}).get("content", "")
+        return ""
+    
+    translated_text = response_data.get("choices")[0].get("message", {}).get("content", "")
     translated_text = translated_text.replace("将下面的日文文本翻译成中文：", "").replace("<|im_end|>", "")
     translated_text = fix_translation_end(text, translated_text)
     translated_text = unescape_translation(text, translated_text)
