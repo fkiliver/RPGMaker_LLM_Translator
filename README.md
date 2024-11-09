@@ -29,6 +29,8 @@
 部署教程：详见[本仓库wiki](https://github.com/fkiliver/RPGMaker_LLM_Translator/wiki)
 
 ### Translator++
+详见[本仓库wiki](https://github.com/fkiliver/RPGMaker_LLM_Translator/wiki)
+
 在Sakura模型启动后，修改proxy.py的TARGET_URL为Sakura地址  
 `
 TARGET_URL = "http://127.0.0.1:8848/v1/chat/completions"  # 转发的目标URL
