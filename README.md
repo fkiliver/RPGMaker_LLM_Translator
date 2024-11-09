@@ -8,15 +8,16 @@
 这是一个基于Mtool/Translator++和Sakura模型的RPGMaker游戏本地翻译器，能够提供高质量离线日文翻译  
 建议使用[Sakura-13B-Galgame翻译模型](https://github.com/SakuraLLM/Sakura-13B-Galgame)，当前支持版本为Sakura v0.8/v0.9/v0.10pre1/Galtransl-v2.6
 
-已跑通直接使用Translator++的翻译流程，效果达到预期。但考虑到12$的价格，仍会在近期对MTool版本进行重构。
+项目经过重构，支持Mtool和Translator和最新版本Sakura模型，详细使用说明正在施工中。
 
 ## TODO
 - [ ] 添加退化检测
-- [ ] 添加历史上文
-- [ ] 添加prompt字典
+- [x] 添加历史上文
+- [x] 添加prompt字典
 - [x] 添加并发
-- [x] 添加对sakura v0.10支持
-- [ ] 去除对sakura v0.9/v0.8支持
+- [x] 添加对Sakura v0.10支持
+- [x] 添加对Sakura v1.0支持
+- [x] 添加对Galtransl-v2.6支持
 - [ ] 添加GUI
 - [x] 添加换行符分割
 
