@@ -11,7 +11,7 @@
 项目经过重构，支持Mtool和Translator和最新版本Sakura模型，详细使用说明正在施工中。
 
 ## TODO
-- [ ] 添加退化检测
+- [x] 添加退化检测（仅MTool）
 - [x] 添加历史上文
 - [x] 添加prompt字典
 - [x] 添加并发
