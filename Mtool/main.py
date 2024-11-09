@@ -1,270 +1,250 @@
 import json
-import csv
-import pandas as pd
 import requests
 import re
 import os
+import pandas as pd
 from tqdm import tqdm
 import unicodedata
+import csv
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
-def contains_japanese(text):
-    # 将文本中的半角假名转换为全角假名
-    text = unicodedata.normalize('NFKC', text)
-    # 检查文本是否包含日文字符
-    return bool(re.search(r'[\u3040-\u30ff\u3400-\u4DBF\u4E00-\u9FFF]', text)), text
-
-def log_repetitive(index):
-    print("存在翻译异常，记录至log.txt...")
-    # 记录异常的行号到log.txt
-    with open('log.txt', 'a', encoding='utf-8') as file:
-        file.write(f"异常行号：{index+2}\n")
-
-def split_text_with_newlines(text):
-    # 以换行符分割文本
-    paragraphs = re.split(r'(\r\n|\r|\n)', text)
-    return paragraphs
-
-def translate_text_by_paragraph(text, index):
-    segments = split_text_with_newlines(text)
-    # 初始化变量来存储翻译后的文本和当前处理的换行符
-    translated_segments = []
-    for segment in segments:
-        # 检查当前段落是否是换行符
-        if segment in ['\r\n', '\r', '\n']:
-            translated_segments.append(segment)
-        #检查当前段落是否为空
-        elif segment == '':
-            translated_segments.append(segment)
-        else:
-            #检查当前段落是否为日文
-            contains_jp, updated_segment = contains_japanese(segment)
-            if contains_jp==0:
-                translated_segments.append(updated_segment)
-            else:
-                # 翻译当前段落
-                translated_segment = translate_text(updated_segment, index)
-                translated_segments.append(translated_segment)
-
-    # 将翻译后的段落和换行符重新组合成完整的文本
-    translated_text = ''.join(translated_segments)
-    return translated_text
-
-def translate_text(text, index, attempt=1):
-    if attempt > 3:
-        # 如果重试次数超过3次，跳过这一行
-        log_repetitive(index)
-        return text
-
-    print(f"提交的文本为：{text}")
-    
-    # 构造POST请求的数据
-    if api_type == 0 or api_type == 2:
-        data = {
-            "frequency_penalty": 0.05,
-            "n_predict": 1000,
-            "prompt": f"<|im_start|>system\n你是一个轻小说翻译模型，可以流畅通顺地以日本轻小说的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，不擅自添加原文中没有的代词。<|im_end|>\n<|im_start|>user\n将下面的日文文本翻译成中文：{text}<|im_end|>\n<|im_start|>assistant\n",
-            "repeat_penalty": 1,
-            "temperature": 0.1,
-            "top_k": 40,
-            "top_p": 0.3
-        }
-    else:
-        data = {
-            "model": "sukinishiro",
-            "messages": [{
-                    "role": "system",
-                    "content": "你是一个轻小说翻译模型，可以流畅通顺地以日本轻小说的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，不擅自添加原文中没有的代词。"
-                },
-                {
-                    "role": "user",
-                    "content": f"将下面的日文文本翻译成中文：{text}"
-                }
-            ],
-            "temperature": 0.1,
-            "top_p": 0.3,
-            "max_tokens":1000,
-            "frequency_penalty":0.05,
-            "do_sample": "false",
-            "top_k": 40,
-            "um_beams": 1,
-            "repetition_penalty": 1.0
-        }
-
-    # 发送POST请求
-    try:
-        response = requests.post(endpoint[0], json=data)
-        response.raise_for_status()
-    except requests.RequestException as e:
-        print(f'请求翻译API错误: {e}')
-        return text
-    # 获取响应的内容
-    if api_type == 0 :
-        translated_text = response.json()["content"]
-    elif api_type == 2:
-        translated_text = response.json()['choices'][0]['text']
-    else :
-        translated_text = response.json()["choices"][0]["message"]["content"]
-
-    # 去除翻译结果中不希望出现的特定字符串
-    unwanted_string = "将下面的日文文本翻译成中文："
-    translated_text = translated_text.replace(unwanted_string, "")
-    
-    # 去除高版本llama.cpp结尾的<|im_end|>
-    translated_text = translated_text.replace("<|im_end|>", "")
-
-    return translated_text
-
-def save_progress(last_processed,last_task):
-    # 保存当前的进度到配置文件
-    with open('config.json', 'r', encoding='utf-8') as file:
-        data = json.load(file)
-    data['last_processed'] = last_processed
-    data['task_list'] = last_task
-    with open('config.json', 'w') as file:
-        json.dump(data, file, indent=4)
-
-    # json.dump({'last_processed': last_processed}, file)
-
-def Jp_hash(text):
-    text = re.sub(r'[.。,，、！!？?♡「」\s]', '', text)
-    return hash(text)
-
-def init():  
-    # 检查配置文件是否存在
+# 读取全局配置信息
+def load_config():
     if not os.path.exists("config.json"):
         config_data = {
             "last_processed": 0,
-            "task_list": [],
-            "endpoint": [],
-            "api_type": 0,
+            "task_list": ["ManualTransFile.json"],
+            "endpoint": ["http://127.0.0.1:5000/v1/chat/completions"],
+            "model_type": "Sgaltransl",
+            "model_version": "2.6",
+            "use_dict": False,
+            "dict": {},
+            "dict_mode": "Partial",
             "save_frequency": 100,
             "shutdown": 0,
             "max_workers": 1,
-            "use_lock": 0
+            "context_size": 0
         }
         with open("config.json", 'w') as file:
             json.dump(config_data, file, indent=4)
-    # 读取配置文件
-    global api_type, endpoint, save_frequency, shutdown, task_list, start_index
     with open('config.json', 'r', encoding='utf-8') as file:
-        data=json.load(file)
-    endpoint = data['endpoint']
-    api_type = data['api_type']
-    save_frequency = data['save_frequency']
-    shutdown = data['shutdown']
-    task_list = data['task_list']
-    start_index = data['last_processed']
-    # 读取api信息
-    if endpoint == []:
-        veri = input("请输入数字来选择部署类型(默认为本地部署):\n[0] 本地部署Sakura v0.9\n[1] kaggle部署Sakura v0.9 \n[2] text-generation-webui\n")
-        if veri == "" :
-            api_type = 0
-        else:
-            api_type = int(veri)
-        data['api_type'] = api_type
+        return json.load(file)
 
-        if api_type == 0 :
-            verurl = input("请输入Api地址(默认为http://127.0.0.1:8080/completion):\n")
-            if verurl == "" :
-                endpoint.append("http://127.0.0.1:8080/completion")
+# 初始化字典
+def initialize_dict(dict_str):
+    if not dict_str:
+        return {}, ""
+    try:
+        dict_data = json.loads(dict_str)
+        dict_converted = {}
+        for key, value in dict_data.items():
+            if isinstance(value, list) and len(value) > 0:
+                if len(value) == 1:
+                    dict_converted[key] = [value[0], ""]
+                else:
+                    dict_converted[key] = value[:2]
             else:
-                endpoint.append(verurl)
-        elif api_type == 2:
-            verurl = input("请输入Api地址(默认为http://127.0.0.1:5000/v1/completions):\n")
-            if verurl == "" :
-                endpoint.append("http://127.0.0.1:5000/v1/completions")
-            else:
-                endpoint.append(verurl)
-        else :
-            verurl = input("请输入Api地址(例如https://114-514-191-810.ngrok-free.app):\n")
-            if verurl == "" :
-                print("必须提供Api地址！")
-                sys.exit()
-            else :
-                endpoint.append(verurl+"/v1/chat/completions")
-        data['endpoint']=endpoint
-        print("配置已保存到config.json,下次启动将默认加载")
-    # 读取任务列表,保存频率,自动关机信息
-    if task_list == []:
-        print("请输入需要翻译的文件名或者文件夹名，如有多个请换行输入(默认为ManualTransFile.json):")
-        while True:
-            veri = input()
-            if veri == "" :
-                if task_list == []: 
-                    if os.path.exists("ManualTransFile.json") == 0:
-                        print("文件ManualTransFile.json不存在")
-                        sys.exit()
-                    task_list = ["ManualTransFile.json"]
-                break
-            file_name = veri.split("\n")[0]
-            # 判断是否是绝对路径
-            if os.path.isabs(file_name) == 0:
-                file_name = os.path.abspath(file_name)
-                       
-            if os.path.exists(str(file_name)) == 0:
-                print(f"文件{file_name}不存在，请重新输入")
-                continue
+                dict_converted[key] = [value, ""]
+        dict_strings = get_dict_string_list(dict_converted)
+        return dict_converted, "\n".join(dict_strings)
+    except Exception as e:
+        print(f"Error initializing dictionary: {e}")
+        return {}, ""
 
-            if os.path.isdir(str(file_name)):
-                for root, dirs, files in os.walk(str(file_name)):
-                    for file in files:
-                        if file.endswith(".json") or file.endswith(".csv"):
-                            task_list.append(os.path.join(root, file))
-                            print(f"已添加{os.path.join(root, file)}")
-            else:
-                task_list.append(file_name)
-        data['task_list'] = task_list
-        # 保存频率
-        veri = input("请输入保存频率(默认为100行):\n")
-        if veri == "" :
-            save_frequency = 100
+# 获取字典字符串列表
+def get_dict_string_list(kv_pairs):
+    dict_list = []
+    for key, value in kv_pairs.items():
+        src = key
+        dst = value[0]
+        info = value[1]
+        if info:
+            dict_list.append(f"{src}->{dst} #{info}")
         else:
-            save_frequency = int(veri)
-        data['save_frequency'] = save_frequency
-        # 自动关机
-        veri = input("是否翻译完成后自动关机？(默认为0)\n[0] 不关机\n[1] 关机\n")
-        if veri == "" :
-            shutdown = 0
+            dict_list.append(f"{src}->{dst}")
+    return dict_list
+
+# 模型版本管理
+def get_translation_model(model_name, model_version):
+    if model_name.lower() == "sakura":
+        if model_version == "0.8":
+            return "SakuraV0_8"
+        elif model_version == "0.9":
+            return "SakuraV0_9"
+        elif model_version == "0.10":
+            return "SakuraV0_10"
+        elif model_version == "1.0":
+            return "SakuraV1_0"
         else:
-            shutdown = int(veri)
-        data['shutdown'] = shutdown
+            return "SakuraV1_0"
+    elif model_name.lower() == "sakura32b":
+        if model_version == "0.10":
+            return "Sakura32bV0_10"
+        else:
+            return "Sakura32bV0_10"
+    elif model_name.lower() == "galtransl":
+        if model_version == "2.6":
+            return "GalTranslV2_6"
+        else:
+            return "GalTranslV2_6"
     else:
-        print(f"已加载任务列表{task_list},保存频率为{save_frequency},自动关机状态为{shutdown}")
-    # 保存配置
-    with open('config.json', 'w') as file:
-        json.dump(data, file, indent=4)
+        return "SakuraV1_0"
 
-def shutdown_pc():
-    if(os.name=='nt'):
-        os.system('shutdown -s -t 60')
+# 检查文本是否包含日文字符
+def contains_japanese(text):
+    text = unicodedata.normalize('NFKC', text)
+    return bool(re.search(r'[\u3040-\u30ff\u3400-\u4DBF\u4E00-\u9FFF]', text)), text
+
+# 分割文本段落
+def split_text_with_newlines(text):
+    paragraphs = re.split(r'(\r\n|\r|\n)', text)
+    return paragraphs
+
+# 判断是否是文件路径
+def is_file_path(text):
+    # 基于文本特征判断是否是文件路径
+    return bool(re.search(r'\.[a-zA-Z0-9]{3}$', text))
+
+# 符号管理工具类
+def fix_translation_end(original, translation):
+    if translation.endswith("。") and not original.endswith("。"):
+        translation = translation[:-1]
+    if translation.endswith("。」") and not original.endswith("。」"):
+        translation = translation[:-2] + "」"
+    return translation
+
+def unescape_translation(original, translation):
+    if "\r" not in original:
+        translation = translation.replace("\r", "\r")
+    if "\n" not in original:
+        translation = translation.replace("\n", "\n")
+    if "\t" not in original:
+        translation = translation.replace("\t", "\t")
+    return translation
+
+# 翻译文本，按段落翻译
+def translate_text_by_paragraph(text, index, api_idx=0, config=None, previous_translations=None):
+    # 如果是文件路径或者文件，直接跳过
+    if is_file_path(text):
+        return text
+    
+    contains_jp, updated_text = contains_japanese(text)
+    if contains_jp:
+        segments = split_text_with_newlines(updated_text)
+        translated_segments = []
+        for segment in segments:
+            if segment in ['\r\n', '\r', '\n']:
+                translated_segments.append(segment)
+            else:
+                if segment:
+                    translated_segments.append(translate_text(segment, index, api_idx=api_idx, config=config, previous_translations=previous_translations))
+                else:
+                    translated_segments.append(segment)
+        translated_text = ''.join(translated_segments)
+        return translated_text
     else:
-        os.system('shutdown -h 1')
+        return text
 
-def save_json_safely(data, task_name):
-    temp_task_name = task_name + '.tmp'
-    with open(temp_task_name, 'w', encoding='utf-8') as file:
-        json.dump(data, file, ensure_ascii=False, indent=4)
-    os.replace(temp_task_name, task_name)  # 替换原文件
+# 调用API进行翻译
+def translate_text(text, index, api_idx=0, attempt=1, config=None, previous_translations=None):
+    if attempt > 3:
+        return text
+    try:
+        endpoint = config['endpoint'][api_idx]
+        model_type = get_translation_model(config['model_type'], config['model_version'])
+        context_size = config.get('context_size', 0)
+        context = previous_translations[-context_size:] if previous_translations else []
+        data = make_request_json(text, model_type, config['use_dict'], config['dict_mode'], config['dict'], context)
+        response = requests.post(endpoint, json=data)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f'请求翻译API错误: {e}')
+        return translate_text(text, index, api_idx, attempt + 1, config, previous_translations)
+    translated_text = response.json().get("choices")[0].get("message", {}).get("content", "")
+    translated_text = translated_text.replace("将下面的日文文本翻译成中文：", "").replace("<|im_end|>", "")
+    translated_text = fix_translation_end(text, translated_text)
+    translated_text = unescape_translation(text, translated_text)
+    print(f"原文: {text}\n翻译: {translated_text}\n")  # 调试信息，输出翻译前后的文本
+    return translated_text
 
-def save_csv_safely(data, task_name):
-    temp_task_name = task_name + '.tmp'
-    data.to_csv(temp_task_name, index=False, quoting=csv.QUOTE_ALL)
-    os.replace(temp_task_name, task_name)  # 替换原文件
+# 处理翻译请求的JSON构造
+def make_request_json(text, model_type, use_dict, dict_mode, dict_data, context):    
+    messages = []
+    
+    if model_type == "SakuraV0_8":
+        messages.append({"role": "system", "content": "你是一个简单的日文翻译模型，将日文翻译成简体中文。"})
+        messages.append({"role": "user", "content": f"将下面的日文文本翻译成中文：{text}"})
+    else:
+        if model_type == "SakuraV0_9":
+            messages.append({"role": "system", "content": "你是一个轻小说翻译模型，可以流畅地将日文翻译成简体中文，并正确使用人称代词。"})
+        elif model_type == "SakuraV0_10":
+            messages.append({"role": "system", "content": "你是一个轻小说翻译模型，可以流畅通顺地以日本轻小说的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，不擅自添加原文中没有的代词。"})
+        elif model_type == "SakuraV1_0":
+            messages.append({"role": "system", "content": "你是一个轻小说翻译模型，可以流畅通顺地以日本轻小说的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，不擅自添加原文中没有的代词。"})
+        elif model_type == "GalTranslV2_6":
+            messages.append({"role": "system", "content": "你是一个视觉小说翻译模型，可以通顺地使用给定的术语表以指定的风格将日文翻译成简体中文，并联系上下文正确使用人称代词。"})
+        else:
+            messages.append({"role": "system", "content": "你是一个轻小说翻译模型，可以流畅通顺地将日文翻译成简体中文。"})
+        
+        if context:
+            for c in context:
+                messages.append({"role": "assistant", "content": c})
+        
+        if use_dict:
+            dict_str = '\n'.join([f"{k}->{v[0]}" for k, v in dict_data.items()])
+            messages.append({"role": "user", "content": f"根据上文和以下术语表：\n{dict_str}\n将下面的日文文本翻译成中文：{text}"})
+        else:
+            messages.append({"role": "user", "content": f"根据上文，将下面的日文文本翻译成中文：{text}"})
+    
+    data = {
+        "model": "sukinishiro",
+        "messages": messages,
+        "temperature": 0.1,
+        "top_p": 0.3,
+        "max_tokens": 512,
+        "frequency_penalty": 0.2,
+        "do_sample": True,
+        "num_beams": 1,
+        "repetition_penalty": 1.0
+    }
+    return data
 
-def save(data, task_name):
-    if task_name.endswith(".json"):
-        save_json_safely(data, task_name)
-    if task_name.endswith(".csv"):
-        save_csv_safely(data, task_name)
+# 保存翻译进度
+def save_progress(data, filename, index, task_list):
+    if filename.endswith(".json"):
+        with open(filename, 'w', encoding='utf-8') as file:
+            json.dump(data, file, ensure_ascii=False, indent=4)
+    elif filename.endswith(".csv"):
+        data.to_csv(filename, index=False, quoting=csv.QUOTE_ALL)
+    config = load_config()
+    config['last_processed'] = index
+    config['task_list'] = task_list
+    with open('config.json', 'w', encoding='utf-8') as file:
+        json.dump(config, file, indent=4)
 
+# 主流程
 def main():
-    init()
-    while task_list != []:
-        # 读取JSON或CSV文件
-        task_name = task_list[0]
-        json_keys = []
-        print(f"开始翻译{task_name},正在读取文件...")
+    config = load_config()
+    if not config['endpoint']:
+        print("请配置API endpoint后再运行程序。")
+        return
+    
+    # 初始化字典
+    dict_data, full_dict_str = initialize_dict(json.dumps(config.get('dict', {})))
+    config['dict'] = dict_data
+    
+    task_list = config['task_list']
+    if not task_list:
+        print("未找到待翻译文件，请更新config.json。")
+        return
+
+    for task_name in task_list:
+        if not os.path.exists(task_name):
+            print(f"文件{task_name}不存在，跳过。")
+            continue
+
         if task_name.endswith(".json"):
             with open(task_name, 'r', encoding='utf-8') as file:
                 data = json.load(file)
@@ -273,44 +253,36 @@ def main():
             data = pd.read_csv(task_name, encoding='utf-8')
             data['Original Text'] = data['Original Text'].astype(str)
             data['Machine translation'] = data['Machine translation'].astype(str)
-        print("读取完成.") 
-        print('开始翻译...')
-        # 使用tqdm创建进度条
-        for i in tqdm(range(start_index, len(data)), desc="任务进度"):
-            print(f'翻译文件:{task_name} 索引:第{i+2}行')
-            if task_name.endswith(".json"):
-                original_text = json_keys[i]
-            if task_name.endswith(".csv"):
-                original_text = data.loc[i, 'Original Text']
-            contains_jp, updated_text = contains_japanese(original_text)
-            if contains_jp:
-                translated_text = translate_text_by_paragraph(updated_text, i) #以换行符作为分割点多次提交
-                print(f"原文: {updated_text} => 翻译: {translated_text}\n\n")
-            else:
-                print(f"跳过（不含日文）: {original_text}")
-                translated_text = original_text
-            if task_name.endswith(".json"):
-                data[original_text] = translated_text
-            if task_name.endswith(".csv"):
-                data.loc[i, 'Machine translation'] = translated_text
+        else:
+            print(f"不支持的文件类型: {task_name}")
+            continue
 
-            if (i + 1) % save_frequency == 0:
-                print(f"达到{save_frequency}行，保存进度和文件...")
-                save_progress(i + 1,task_list)
-                save(data, task_name)
-                print("保存完成.")
-        
-        task_list.pop(0)
-        save_progress(0,task_list)
-        save(data, task_name)
-        print(f"文件{task_name}翻译完成.")
-        
-    # 翻译完成后进度重置
-    save_progress(0,[])
-    print("All done.")
-    if shutdown == 1:
-        print("翻译完成，将在一分钟后关机...")
-        shutdown_pc()
+        total_keys = len(data)
+        start_index = config['last_processed']
+        api_num = len(config['endpoint'])
+        previous_translations = []
+        with ThreadPoolExecutor(max_workers=config['max_workers']) as executor:
+            future_to_index = {}
+            for i in range(start_index, total_keys):
+                key = json_keys[i] if task_name.endswith(".json") else data.loc[i, 'Original Text']
+                api_index = i % api_num
+                future = executor.submit(translate_text_by_paragraph, key, i, api_index, config, previous_translations)
+                future_to_index[future] = i
+            for future in tqdm(as_completed(future_to_index), total=len(future_to_index), desc="任务进度"):
+                index = future_to_index[future]
+                try:
+                    translated_text = future.result()
+                    previous_translations.append(translated_text)
+                    if len(previous_translations) > config.get('context_size', 0):
+                        previous_translations.pop(0)
+                    if task_name.endswith(".json"):
+                        data[json_keys[index]] = translated_text
+                    if task_name.endswith(".csv"):
+                        data.loc[index, 'Machine translation'] = translated_text
+                    if (index + 1) % config['save_frequency'] == 0 or index + 1 == total_keys:
+                        save_progress(data, task_name, index + 1, task_list)
+                except Exception as exc:
+                    print(f'{index + 1}行翻译发生异常: {exc}')
 
 if __name__ == "__main__":
     main()
