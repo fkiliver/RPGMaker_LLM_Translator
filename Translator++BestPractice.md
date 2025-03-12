@@ -2,7 +2,7 @@
 
 由于RPGMaker制作的游戏在文本细节上各不相同，在翻译了数个不同的游戏后，我总结了一套比较优秀的工作流，希望可以帮大家获得更好的翻译质量。
 
-**本文内容有一定上手门槛**
+**本文内容有较高上手门槛**
 
 ## Translator++设置
 
@@ -20,7 +20,9 @@ MTools翻译的一个缺点就是会把所有字符串都翻译了，而Translat
 
 ![](pic/3.png)
 
-Translator++拥有js脚本执行功能，右键**Run Automation->For Each Row**执行以下脚本，可以为所有路径符合以下正则表达式的行打上绿色标签，之后翻译的时候忽略即可。
+Translator++拥有js脚本执行功能，选中需要执行脚本的文件，右键，在**With XX Selected -> Run Automation -> For Each Row**执行以下脚本，可以为所有路径符合以下正则表达式的行打上绿色标签，之后翻译的时候**忽略**即可。
+
+更多执行细节，请参考[官方文档](https://dreamsavior.net/docs/translator/execute-script/pin-your-automation-to-quickly-launch-from-translator/)。
 
 ```js
 if (!Array.isArray(this.context)) {
@@ -72,7 +74,7 @@ if (result) {
 
 ## 开始翻译
 
-翻译的时候，红色和蓝色标签是Translator++加上的，记得和绿色的标签一起加入黑名单，这些行都不处理。
+翻译的时候，红色和蓝色标签是Translator++加上的，记得和绿色的标签一起加入**黑名单**，这些行都不处理。
 
 ## Python后端
 
@@ -87,19 +89,19 @@ default_system_prompt = "你是一个轻小说翻译模型，可以流畅通顺�
 
 history = []
 def get_response(system_prompt, user_prompt, history_num = 3):
-	global history
-	messages = [{"role": "system", "content": system_prompt}]
-	if history_num > 0:
-		if len(history) > history_num:
-			history = history[-history_num:]
-		if len(history) > 0:
-			messages.append({"role": "assistant", "content": "\n".join(history)})
-	messages.append({"role": "user", "content": user_prompt})
-	res = llm.create_chat_completion(messages=messages, temperature=0.1, top_p=0.3, repeat_penalty=1, max_tokens=512, frequency_penalty=0.2)
-	res = res["choices"][0]["message"]["content"]
-	if history_num > 0:
-		history.append(res)
-	return res
+    global history
+    messages = [{"role": "system", "content": system_prompt}]
+    if history_num > 0:
+        if len(history) > history_num:
+            history = history[-history_num:]
+        if len(history) > 0:
+            messages.append({"role": "assistant", "content": "\n".join(history)})
+    messages.append({"role": "user", "content": user_prompt})
+    res = llm.create_chat_completion(messages=messages, temperature=0.1, top_p=0.3, repeat_penalty=1, max_tokens=512, frequency_penalty=0.2)
+    res = res["choices"][0]["message"]["content"]
+    if history_num > 0:
+        history.append(res)
+    return res
 
 def translate(text: str, gpt_dicts: list[dict] = []) -> str:
     """
@@ -128,6 +130,19 @@ def translate(text: str, gpt_dicts: list[dict] = []) -> str:
     return get_response(default_system_prompt, user_prompt)
 ```
 
+接下来所有代码块的代码都是api.py中的，按顺序依次复制粘贴即可使用：
+
+```py
+from sakura import translate
+from fastapi import FastAPI, Request
+from functools import lru_cache
+import uvicorn
+import json
+import re
+
+app = FastAPI()
+```
+
 api.py是让Translator++调用的接口，里面有几个提高模型翻译质量的技巧，所以会分段讲解。
 
 ```py
@@ -146,7 +161,7 @@ def api_translate(text: str, use_dicts = False) -> str:
     return result
 ```
 
-这一段是api的翻译接口，很好理解的。重点是这个**控制符**字典，它的作用我后面会说。字典里也可以放一些比如人名之类的专有名词，避免前后文不一致。
+这一段是api的翻译接口，很好理解的。里面还有全半角空格替换和全英文文本排除功能。重点是这个**控制符**字典，它的作用我后面会说。字典里也可以放一些比如人名之类的专有名词，避免前后文不一致。
 
 ```py
 def line_translate(line: str) -> str:
@@ -239,9 +254,12 @@ async def read_item(request: Request):
     data = data_translate(data)
     print(data)
     return {"choices": [{"message": {"content": json.dumps(data)}}]}
+
+if __name__ == '__main__':
+    uvicorn.run("api:app", reload=True)
 ```
 
-最后，使用FastAPI搭建一个简单的服务就可以，稍微封装一下使其符合格式。
+最后这段代码是使用FastAPI搭建了一个简单的服务，稍微封装一下使其符合OpenAI格式。
 
 这些后端的优化策略，既不能直接在Translator++中简单实现，也不能在通用的模型调用接口上简单实现。虽然涉及到简单的Python代码编写，有一定上手门槛，但是可以对文本内容有更细粒度的处理，最大幅度的提高翻译质量。
 
