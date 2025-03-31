@@ -87,6 +87,8 @@ def get_translation_model(model_name, model_version):
     elif model_name.lower() == "galtransl":
         if model_version == "2.6":
             return "GalTranslV2_6"
+        elif model_version == "3.0":
+            return "GalTranslV3"
         else:
             return "GalTranslV2_6"
     else:
@@ -197,25 +199,42 @@ def make_request_json(text, model_type, use_dict, dict_mode, dict_data, context)
             messages.append({"role": "system", "content": "你是一个轻小说翻译模型，可以流畅通顺地以日本轻小说的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，不擅自添加原文中没有的代词。"})
         elif model_type == "GalTranslV2_6":
             messages.append({"role": "system", "content": "你是一个视觉小说翻译模型，可以通顺地使用给定的术语表以指定的风格将日文翻译成简体中文，并联系上下文正确使用人称代词。"})
+        elif model_type == "GalTranslV3":
+            messages.append({"role": "system", "content": "你是一个视觉小说翻译模型，可以通顺地使用给定的术语表以指定的风格将日文翻译成简体中文，并联系上下文正确使用人称代词。"})
         else:
             messages.append({"role": "system", "content": "你是一个轻小说翻译模型，可以流畅通顺地将日文翻译成简体中文。"})
         
         if context:
-            for c in context:
-                messages.append({"role": "assistant", "content": c})
-        
-        if use_dict:
-            dict_str = '\n'.join([f"{k}->{v[0]}" for k, v in dict_data.items()])
-            messages.append({"role": "user", "content": f"根据上文和以下术语表：\n{dict_str}\n将下面的日文文本翻译成中文：{text}"})
+            history_text = "历史翻译：" + "\n".join(context)
         else:
-            messages.append({"role": "user", "content": f"根据上文，将下面的日文文本翻译成中文：{text}"})
+            history_text = ""
+        
+        if model_type == "GalTranslV3":
+            if use_dict:
+                dict_str = '\n'.join([f"{k}->{v[0]}" for k, v in dict_data.items()])
+                user_content = f"{history_text}\n参考以下术语表\n{dict_str}\n根据以上术语表的对应关系和备注，结合历史剧情和上下文，将下面的文本从日文翻译成简体中文：\n{text}"
+            else:
+                user_content = f"{history_text}\n结合历史剧情和上下文，将下面的文本从日文翻译成简体中文：\n{text}"
+            messages.append({"role": "user", "content": user_content})
+        else:
+            if context:
+                for c in context:
+                    messages.append({"role": "assistant", "content": c})
+            
+            if use_dict:
+                dict_str = '\n'.join([f"{k}->{v[0]}" for k, v in dict_data.items()])
+                messages.append({"role": "user", "content": f"根据上文和以下术语表：\n{dict_str}\n将下面的日文文本翻译成中文：{text}"})
+            else:
+                messages.append({"role": "user", "content": f"根据上文，将下面的日文文本翻译成中文：{text}"})
+    
+    temperature = 0.6 if model_type == "GalTranslV3" else 0.2
     
     data = {
         "model": "sukinishiro",
         "messages": messages,
-        "temperature": 0.1,
+        "temperature": temperature,
         "top_p": 0.3,
-        "max_tokens": 512,
+        "max_tokens": 384,
         "frequency_penalty": 0.2,
         "do_sample": True,
         "num_beams": 1,
