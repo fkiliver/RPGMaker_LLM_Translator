@@ -106,6 +106,12 @@ def contains_japanese(text):
     text = unicodedata.normalize('NFKC', text)
     return bool(re.search(r'[\u3040-\u30ff\u3400-\u4DBF\u4E00-\u9FFF]', text)), text
 
+# 判断文本是否为纯英文（不包含中文字符）
+def is_pure_english(text):
+    # 检查文本是否仅包含英文字母、数字、标点和空白字符
+    # 如果包含中文字符则返回False
+    return not bool(re.search(r'[\u4e00-\u9fff]', text))
+
 # 分割文本段落
 def split_text_with_newlines(text):
     paragraphs = re.split(r'(\r\n|\r|\n)', text)
@@ -217,6 +223,14 @@ def translate_text(text, index, api_idx=0, attempt=1, config=None, previous_tran
     translated_text = translated_text.replace("将下面的日文文本翻译成中文：", "").replace("<|im_end|>", "")
     translated_text = fix_translation_end(text, translated_text)
     translated_text = unescape_translation(text, translated_text)
+    
+    # 检查翻译结果是否为纯英文，如果是则记录行号
+    if is_pure_english(translated_text):
+        console_print(f"警告：行号 {index} 的翻译结果为纯英文：'{translated_text}'")
+        
+        with open("english_translations.log", "a", encoding="utf-8") as log_file:
+            log_file.write(f"行号: {index}, 原文: {text}, 翻译: {translated_text}\n")
+    
     console_print(f"原文: {text}\n翻译: {translated_text}\n")  # 调试信息，输出翻译前后的文本
     return translated_text
 
@@ -260,9 +274,9 @@ def make_request_json(text, model_type, use_dict, dict_mode, dict_data, context)
             
             if use_dict:
                 dict_str = '\n'.join([f"{k}->{v[0]}" for k, v in dict_data.items()])
-                messages.append({"role": "user", "content": f"根据上文和以下术语表：\n{dict_str}\n将下面的日文文本翻译成中文：{text}"})
+                messages.append({"role": "user", "content": f"参考以下术语表：\n{dict_str}\n根据以上术语表的对应关系和备注，结合历史剧情和上下文，将下面的文本从日文翻译成简体中文：{text}"})
             else:
-                messages.append({"role": "user", "content": f"根据上文，将下面的日文文本翻译成中文：{text}"})
+                messages.append({"role": "user", "content": f"结合历史剧情和上下文，将下面的文本从日文翻译成简体中文：{text}"})
     
     temperature = 0.6 if model_type == "GalTranslV3" else 0.2
     
