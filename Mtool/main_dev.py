@@ -7,13 +7,21 @@ from tqdm import tqdm
 import unicodedata
 import csv
 import sys
+import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
+import time
+
+# 全局变量，用于控制进度条显示
+progress_bars = {}
+progress_lock = threading.Lock()
+debug_output = []  # 用于存储调试输出
 
 # 读取全局配置信息
 def load_config():
     if not os.path.exists("config.json"):
         config_data = {
+            "last_processed": 0,
             "task_list": ["ManualTransFile.json"],
             "endpoint": ["http://127.0.0.1:5000/v1/chat/completions"],
             "model_type": "Sgaltransl",
@@ -49,7 +57,7 @@ def initialize_dict(dict_str):
         dict_strings = get_dict_string_list(dict_converted)
         return dict_converted, "\n".join(dict_strings)
     except Exception as e:
-        print(f"Error initializing dictionary: {e}")
+        console_print(f"Error initializing dictionary: {e}")
         return {}, ""
 
 # 获取字典字符串列表
@@ -125,6 +133,36 @@ def unescape_translation(original, translation):
         translation = translation.replace("\t", "\t")
     return translation
 
+# 自定义用于调试输出的函数
+def console_print(*args, **kwargs):
+    message = " ".join(map(str, args))
+    with progress_lock:
+        # 将消息存入调试输出列表
+        debug_output.append(message)
+        # 限制调试输出列表长度
+        if len(debug_output) > 20:
+            debug_output.pop(0)
+        
+        # 清屏并重新打印所有内容
+        print("\033[H\033[J", end="")  # 清屏
+        
+        # 打印调试输出
+        for line in debug_output:
+            print(line)
+        
+        # 打印空行分隔
+        rows, columns = shutil.get_terminal_size()
+        print("\n" * 3)  # 空出进度条区域
+        
+        # 刷新所有进度条
+        refresh_all_progress_bars()
+
+# 刷新所有进度条
+def refresh_all_progress_bars():
+    for bar in progress_bars.values():
+        if bar:
+            bar.refresh()
+
 # 翻译文本，按段落翻译
 def translate_text_by_paragraph(text, index, api_idx=0, config=None, previous_translations=None):
     # 如果是文件路径或者文件，直接跳过
@@ -165,21 +203,21 @@ def translate_text(text, index, api_idx=0, attempt=1, config=None, previous_tran
 
         # 检查是否发生退化，重试时调整 frequency_penalty
         if completion_tokens == max_tokens:
-            print("模型可能发生退化，调整 frequency_penalty 并重试...")
+            console_print("模型可能发生退化，调整 frequency_penalty 并重试...")
             data["frequency_penalty"] = 0.8
             response = requests.post(endpoint, json=data)
             response.raise_for_status()
             response_data = response.json()
 
     except requests.RequestException as e:
-        print(f'请求翻译API错误: {e}')
+        console_print(f'请求翻译API错误: {e}')
         return ""
     
     translated_text = response_data.get("choices")[0].get("message", {}).get("content", "")
     translated_text = translated_text.replace("将下面的日文文本翻译成中文：", "").replace("<|im_end|>", "")
     translated_text = fix_translation_end(text, translated_text)
     translated_text = unescape_translation(text, translated_text)
-    print(f"原文: {text}\n翻译: {translated_text}\n")  # 调试信息，输出翻译前后的文本
+    console_print(f"原文: {text}\n翻译: {translated_text}\n")  # 调试信息，输出翻译前后的文本
     return translated_text
 
 # 处理翻译请求的JSON构造
@@ -329,6 +367,23 @@ def translate_worker(thread_id, task_name, data, json_keys, progress_manager, co
     # 获取该线程的历史翻译记录
     previous_translations = progress_manager.get_previous_translations(thread_id)
     
+    # 使用tqdm创建带有更多信息的进度条
+    with progress_lock:
+        pbar = tqdm(
+            total=end_index - thread_info["start_index"] + 1,
+            desc=f"线程 {thread_id}",
+            position=thread_id,
+            leave=True,
+            ncols=100,  # 增加宽度以容纳更多信息
+            bar_format='{l_bar}{bar:20}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
+        )
+        progress_bars[thread_id] = pbar
+    
+    # 计算已完成的工作量并更新进度条
+    completed = start_index - thread_info["start_index"]
+    if completed > 0:
+        pbar.update(completed)
+    
     for i in range(start_index, end_index + 1):
         api_index = thread_id % api_num  # 使用线程ID来分配API端点
         
@@ -353,10 +408,19 @@ def translate_worker(thread_id, task_name, data, json_keys, progress_manager, co
             thread_id, i + 1, translated_text, config.get('context_size', 0)
         )
         
+        # 更新进度条
+        with progress_lock:
+            pbar.update(1)
+        
         # 定期保存整个翻译文件
         if (i + 1) % config['save_frequency'] == 0 or i + 1 > end_index:
             save_translation_data(data, task_name)
-            print(f"线程 {thread_id}: 已保存进度 {i + 1}/{end_index + 1}")
+            console_print(f"线程 {thread_id}: 已保存进度 {i + 1}/{end_index + 1}")
+    
+    # 完成后关闭进度条并从字典中移除
+    with progress_lock:
+        pbar.close()
+        progress_bars[thread_id] = None
 
 # 保存翻译数据
 def save_translation_data(data, filename):
@@ -366,11 +430,21 @@ def save_translation_data(data, filename):
     elif filename.endswith(".csv"):
         data.to_csv(filename, index=False, quoting=csv.QUOTE_ALL)
 
+# 初始化终端显示
+def setup_terminal():
+    # 清屏
+    os.system('cls' if os.name == 'nt' else 'clear')
+    # 将光标移到顶部
+    print("\033[H", end="")
+
 # 主函数
 def main():
+    # 初始化终端显示
+    setup_terminal()
+    
     config = load_config()
     if not config['endpoint']:
-        print("请配置API endpoint后再运行程序。")
+        console_print("请配置API endpoint后再运行程序。")
         return
     
     # 初始化字典
@@ -379,12 +453,12 @@ def main():
     
     task_list = config['task_list']
     if not task_list:
-        print("未找到待翻译文件，请更新config.json。")
+        console_print("未找到待翻译文件，请更新config.json。")
         return
 
     for task_name in task_list:
         if not os.path.exists(task_name):
-            print(f"文件{task_name}不存在，跳过。")
+            console_print(f"文件{task_name}不存在，跳过。")
             continue
 
         # 加载数据
@@ -400,12 +474,16 @@ def main():
             total_items = len(data)
             json_keys = None
         else:
-            print(f"不支持的文件类型: {task_name}")
+            console_print(f"不支持的文件类型: {task_name}")
             continue
 
         # 创建或加载进度管理器
         num_threads = config['max_workers']
         progress_manager = TranslationProgress(task_name, total_items, num_threads)
+        
+        console_print(f"开始处理任务: {task_name} (总条目: {total_items})")
+        console_print("调试信息将显示在顶部，进度条显示在底部")
+        time.sleep(1)  # 给用户时间阅读信息
         
         # 创建并启动工作线程
         threads = []
@@ -417,16 +495,26 @@ def main():
             threads.append(thread)
             thread.start()
             thread_info = progress_manager.get_thread_info(thread_id)
-            print(f"线程 {thread_id} 已启动，处理范围: {thread_info['start_index']} - {thread_info['end_index']}, 当前进度: {thread_info['current_index']}")
+            console_print(f"线程 {thread_id} 已启动，处理范围: {thread_info['start_index']} - {thread_info['end_index']}, 当前进度: {thread_info['current_index']}")
         
         # 等待所有线程完成
         for thread in threads:
             thread.join()
         
-        print(f"任务 {task_name} 翻译完成")
+        console_print(f"任务 {task_name} 翻译完成")
         
         # 任务完成后，可以删除进度文件或保留作为记录
         # os.remove(f"{task_name}.progress.json")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        # 处理Ctrl+C中断
+        print("\n程序被用户中断，正在保存进度...")
+        # 这里可以添加保存进度的代码
+    except Exception as e:
+        print(f"程序发生异常: {e}")
+    finally:
+        # 确保在程序退出时清理终端
+        print("\033[?25h")  # 确保光标可见
