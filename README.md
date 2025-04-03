@@ -29,16 +29,7 @@
 ### Translator++
 详见[本仓库wiki](https://github.com/fkiliver/RPGMaker_LLM_Translator/wiki)
 
-在Sakura模型启动后，修改proxy.py的TARGET_URL为Sakura地址  
-`
-TARGET_URL = "http://127.0.0.1:8848/v1/chat/completions"  # 转发的目标URL
-`
 在Translator++上安装ChatGPT插件
 ![image](https://github.com/user-attachments/assets/b77fc7e6-cb04-4efc-8488-203ac74224ac)
-导入Translator++目录下的form.jsv，修改Target URL为proxy.py监听的端口
-![image](https://github.com/user-attachments/assets/8d22f33a-25e8-4623-abf6-9604c41bdb88)
 
 然后便可以开始翻译了
-
-
-
