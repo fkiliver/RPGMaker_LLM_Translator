@@ -38,13 +38,16 @@ Translator++拥有js脚本执行功能，选中需要执行脚本的文件，右
 
 虽然重复造轮子不是好行为，但是一个简单的Python后端就可以做到很多事情，还是值得简单造一个轮子的。
 
-[llm](llm.py) 和 [api](api.py) 这两个文件实现了一些简单的功能，文件注释写的比较详细，这里就不再赘述代码细节，只简单介绍。
+[llm.py](llm.py) 和 [api.py](api.py) 这两个文件实现了一些简单的功能，文件注释写的比较详细，这里就不再赘述代码细节，只简单介绍。
 
 ### 使用方式
 
-只需要运行 [api](api.py) 即可，主要就需要安装一个 ![llama-cpp-python](https://llama-cpp-python.readthedocs.io/en/latest/) 和一个 FastAPI。
+库依赖不多，主要就需要安装一个 [llama-cpp-python](https://llama-cpp-python.readthedocs.io/en/latest/) 和一个 FastAPI。
+
+在修改了 [api.py](api.py) 的一些参数之后，只需要简单 `python api.py` 即可启动。
 
 ```py
+port = 1500
 logging.basicConfig(filename="log.log")
 history_deque = deque(maxlen=3)
 llm = LLM("galtransl", "Sakura-GalTransl-7B-v3-Q5_K_S.gguf", 8, ["0", "1", "2", "3", "0", "1", "2", "3"])
@@ -54,17 +57,23 @@ dicts = [
 ]
 ```
 
+port为服务启动的端口号。
+
 basicConfig可以设置日志文件名，日志会记录控制符和行数翻译前后不一致的部分，供人工更正。
 
 history_deque控制最大提供给LLM的上文数量。
 
-LLM的参数都有接口说明，值得一提的是工作进程数和CUDA列表。
+LLM的参数都有接口说明，值得一提的是工作进程数和CUDA列表：
 
-如果显存足够，建议一张卡上跑两个工作进程，可以吃满显卡算力，不推荐更多。
+- 如果显存足够，建议一张卡上跑两个工作进程，可以吃满显卡算力，不推荐更多。
+- 如果有多张卡，可以每张卡上都跑单独的工作进程，这个配置是4张4090的参考配置。
+- 这边的工作进程越多，Translator++就应该设置越大的**Max row per concurrent requests**，以减少上下文切换的损耗。
 
-如果有多张卡，可以每张卡上都跑单独的工作进程，这个配置是4张4090的参考配置。
+app一般不用修改。
 
-这边的工作进程越多，Translator++就应该设置越大的**Max row per concurrent requests**，以减少上下文切换的损耗。
+dicts是提供给模型的字典，如果要使用这个后端，至少保留控制符这个说明。
+
+如果不想深究，下面的小节可以跳过，直接看结束翻译段落即可。
 
 ### 控制符格式
 

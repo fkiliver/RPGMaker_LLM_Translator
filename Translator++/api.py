@@ -8,6 +8,7 @@ import uvicorn
 import json
 import re
 
+port = 1500
 logging.basicConfig(filename="log.log")
 history_deque = deque(maxlen=3)
 llm = LLM("galtransl", "Sakura-GalTransl-7B-v3-Q5_K_S.gguf", 8, ["0", "1", "2", "3", "0", "1", "2", "3"])
@@ -172,4 +173,4 @@ def read_item(text: str):
     return result
 
 if __name__ == '__main__':
-    uvicorn.run(app, port=1500)
+    uvicorn.run(app, port=port)
