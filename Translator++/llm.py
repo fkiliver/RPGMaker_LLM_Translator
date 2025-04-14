@@ -13,7 +13,7 @@ def _init_worker(model_path: str, cuda_device: str):
     global worker_model
     print(f"PID: {os.getpid()} CUDA: {cuda_device}")
     os.environ["CUDA_VISIBLE_DEVICES"] = cuda_device
-    worker_model = Llama(model_path, n_gpu_layers=-1, verbose=False)
+    worker_model = Llama(model_path, n_gpu_layers=-1, n_ctx=2048, verbose=False)
 
 def _get_glossary(gpt_dicts: list[dict]) -> str:
     """

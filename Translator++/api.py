@@ -13,15 +13,9 @@ logging.basicConfig(filename="log.log")
 history_deque = deque(maxlen=3)
 llm = LLM("galtransl", "Sakura-GalTransl-7B-v3-Q5_K_S.gguf", 8, ["0", "1", "2", "3", "0", "1", "2", "3"])
 app = FastAPI()
-dicts = [
-    {"src": "控制符", "dst": "控制符"},
-    {"src": "ヘレナ・ルビンシュタイン", "dst": "海伦娜·鲁宾斯坦"},
-    {"src": "セシリア・フェリシアーノ", "dst": "塞西莉亚·费利西亚诺"},
-    {"src": "シャルロット・ローザリエ", "dst": "夏洛特·罗莎莉亚"},
-    {"src": "ソレイニャ", "dst": "索蕾妮娅"},
-    {"src": "シスター・ルシア", "dst": "修女·露西亚"},
-    {"src": "ヌーディア", "dst": "努迪娅"},
-    {"src": "ルイス・グレイバーン", "dst": "路易斯·格雷文"}
+# 全局字典，只会将相关项传入模型
+global_dicts = [
+    {"src": "原文", "dst": "译文", "info": "说明（可选）"}
 ]
 
 def contains_japanese(text):
@@ -39,12 +33,13 @@ def contains_japanese(text):
     return False
 
 @lru_cache(maxsize=1024)
-def api_translate(text: str, history: tuple[str]) -> str:
+def api_translate(text: str, history: tuple[str], dicts: tuple[str]) -> str:
     """带缓存的单条文本翻译核心函数
     
     Args:
         text (str): 待翻译文本（自动替换全角空格为半角空格）
         history (tuple[str]): 历史翻译上下文（需传入可哈希的tuple）
+        dicts (tuple[str]): 局部字典（需传入可哈希的tuple）
         
     Returns:
         str: 翻译后的中文文本
@@ -57,7 +52,11 @@ def api_translate(text: str, history: tuple[str]) -> str:
     text = text.replace("\u3000", "  ")
     if not contains_japanese(text):
         return text
-    result = llm.translate(text, history, dicts).get()
+    gpt_dicts = list(dicts)
+    for item in global_dicts:
+        if item["src"] in text:
+            gpt_dicts.append(item)
+    result = llm.translate(text, history, gpt_dicts).get()
     return result
 
 def text_translate(text: str, history: tuple[str]) -> str:
@@ -72,24 +71,52 @@ def text_translate(text: str, history: tuple[str]) -> str:
         
     Note:
         1. 自动转换 ${dat[1]} ↔ 控制符1 的格式
-        2. 校验翻译前后控制符数量和行数是否一致
-        3. 不一致时会记录警告日志
+        2. 校验翻译前后控制符数量和行数是否一致，最多重试10次
+        3. 超过最多重试次数时会记录警告日志
     """
     pattern1 = r"\$\{dat\[(\d+)\]\}"
-    pattern2 = r"控制符\1"
-    pattern3 = r"控制符(\d+)"
-    pattern4 = r"${dat[\1]}"
-    before = Counter(re.findall(pattern1, text))
-    line_num = len(text.splitlines())
-    text = re.sub(pattern1, pattern2, text)
-    text = api_translate(text, history)
-    text = re.sub(pattern3, pattern4, text)
-    after = Counter(re.findall(pattern1, text))
-    if before != after:
-        logging.warning(f"{before} != {after}\n{text}")
-    if line_num != len(text.splitlines()):
-        logging.warning(f"line_num mismatch\n{text}")
-    return text
+    pattern2 = r"控制符(\d+)"
+
+    # 重试时控制符会继续向后标号，以提供不同的原文来提高成功率
+    counter = 0
+    def replace_to_chinese(match):
+        nonlocal counter
+        counter += 1
+        placeholder = "控制符" + str(counter)
+        dat_mapping[placeholder] = match.group(0)
+        return placeholder
+    
+    def replace_back_to_dat(match):
+        placeholder = match.group(0)
+        return dat_mapping.get(placeholder, placeholder)
+
+    retry = True
+    retry_counter = 0
+    while retry and retry_counter < 10:
+        dat_mapping = {}
+        retry = False
+        retry_counter += 1
+
+        before = Counter(re.findall(pattern1, text))
+        line_num = len(text.splitlines())
+        result = re.sub(pattern1, replace_to_chinese, text)
+        dat_dicts = ({"src": key, "dst": key} for key in dat_mapping.keys())
+        result = api_translate(result, history, dat_dicts)
+        result = re.sub(pattern2, replace_back_to_dat, result)
+        after = Counter(re.findall(pattern1, result))
+
+        if before != after:
+            # logging.warning(f"{before} != {after}\n{text}\n{result}")
+            retry = True
+        elif line_num != len(result.splitlines()):
+            # logging.warning(f"line_num mismatch\n{text}\n{result}")
+            retry = True
+    if retry:
+        logging.warning(f"stop retry after {retry_counter} attempts\n{text}\n{result}")
+    # elif retry_counter > 1:
+    #     logging.warning(f"get correct translation after {retry_counter} attempts\n{text}\n{result}")
+
+    return result
 
 def data_translate(data: str, history: tuple[str]) -> str:
     """处理包含<SG标签>的复合数据翻译
