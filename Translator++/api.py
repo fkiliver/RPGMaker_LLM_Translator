@@ -1,8 +1,7 @@
 from collections import Counter, deque
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, Request
-from functools import lru_cache
-from llm import LLM
+from llm import LLM, translate
 import logging
 import uvicorn
 import json
@@ -17,47 +16,6 @@ app = FastAPI()
 global_dicts = [
     {"src": "原文", "dst": "译文", "info": "说明（可选）"}
 ]
-
-def contains_japanese(text):
-    """检查文本是否包含日文片假名
-    
-    Args:
-        text (str): 待检测的文本
-        
-    Returns:
-        bool: 如果文本中包含日文片假名（Unicode范围3040-30FF）返回True，否则返回False
-    """
-    for char in text:
-        if "\u3040" <= char <= "\u30FF":
-            return True
-    return False
-
-@lru_cache(maxsize=1024)
-def api_translate(text: str, history: tuple[str], dicts: tuple[str]) -> str:
-    """带缓存的单条文本翻译核心函数
-    
-    Args:
-        text (str): 待翻译文本（自动替换全角空格为半角空格）
-        history (tuple[str]): 历史翻译上下文（需传入可哈希的tuple）
-        dicts (tuple[str]): 局部字典（需传入可哈希的tuple）
-        
-    Returns:
-        str: 翻译后的中文文本
-        
-    Note:
-        1. 使用LRU缓存（最多1024条）加速重复文本翻译
-        2. 非日文文本会直接返回原内容
-        3. 实际调用llm.translate()执行翻译
-    """
-    text = text.replace("\u3000", "  ")
-    if not contains_japanese(text):
-        return text
-    gpt_dicts = list(dicts)
-    for item in global_dicts:
-        if item["src"] in text:
-            gpt_dicts.append(item)
-    result = llm.translate(text, history, gpt_dicts).get()
-    return result
 
 def text_translate(text: str, history: tuple[str]) -> str:
     """预处理文本并执行翻译
@@ -101,7 +59,7 @@ def text_translate(text: str, history: tuple[str]) -> str:
         line_num = len(text.splitlines())
         result = re.sub(pattern1, replace_to_chinese, text)
         dat_dicts = ({"src": key, "dst": key} for key in dat_mapping.keys())
-        result = api_translate(result, history, dat_dicts)
+        result = translate(llm, result, history, dat_dicts, global_dicts)
         result = re.sub(pattern2, replace_back_to_dat, result)
         after = Counter(re.findall(pattern1, result))
 
@@ -196,7 +154,7 @@ def read_item(text: str):
     Returns:
         str: 直接返回翻译结果字符串
     """
-    result = api_translate(text, [])
+    result = translate(llm, text, (), (), ())
     return result
 
 if __name__ == '__main__':

@@ -1,3 +1,5 @@
 __pycache__
 *.gguf
 *.log
+ManualTransFile.json
+TranslatedFile.json

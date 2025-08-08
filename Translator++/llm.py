@@ -1,6 +1,21 @@
 from llama_cpp import Llama
 from multiprocessing import Pool
+from functools import lru_cache
 import os
+
+def contains_japanese(text):
+    """检查文本是否包含日文片假名
+    
+    Args:
+        text (str): 待检测的文本
+        
+    Returns:
+        bool: 如果文本中包含日文片假名（Unicode范围3040-30FF）返回True，否则返回False
+    """
+    for char in text:
+        if "\u3040" <= char <= "\u30FF":
+            return True
+    return False
 
 def _init_worker(model_path: str, cuda_device: str):
     """
@@ -143,3 +158,32 @@ class LLM:
         tasks = [self.__translate(data["text"], data["history"], data["gpt_dicts"]) for data in datas]
         results = [task.get() for task in tasks]
         return results
+
+@lru_cache(maxsize=1024)
+def translate(llm: LLM, text: str, history: tuple[str], local_dicts: tuple[str], global_dicts: tuple[str]) -> str:
+    """带缓存的单条文本翻译核心函数
+    
+    Args:
+        llm (LLM): 多进程LLM翻译器实例
+        text (str): 待翻译文本（自动替换全角空格为半角空格）
+        history (tuple[str]): 历史翻译上下文（需传入可哈希的tuple）
+        local_dicts (tuple[str]): 局部字典（需传入可哈希的tuple）无论文本中是否出现都会传入翻译器
+        global_dicts (tuple[str]): 全局字典（需传入可哈希的tuple）只会将文本中出现的部分传入翻译器
+        
+    Returns:
+        str: 翻译后的中文文本
+        
+    Note:
+        1. 使用LRU缓存（最多1024条）加速重复文本翻译
+        2. 非日文文本会直接返回原内容
+        3. 实际调用llm.translate()执行翻译
+    """
+    text = text.replace("\u3000", "  ")
+    if not contains_japanese(text):
+        return text
+    gpt_dicts = list(local_dicts)
+    for item in global_dicts:
+        if item["src"] in text:
+            gpt_dicts.append(item)
+    result = llm.translate(text, history, gpt_dicts).get()
+    return result
