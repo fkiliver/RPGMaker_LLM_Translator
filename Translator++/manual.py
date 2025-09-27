@@ -1,3 +1,5 @@
+# 一个手动运行的脚本，用于将 MTool 导出的 ManualTransFile.json 进行批量翻译
+
 from concurrent.futures import ThreadPoolExecutor
 from llm import LLM, translate
 from itertools import repeat
